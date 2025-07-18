@@ -1,0 +1,7 @@
+{
+    "java.configuration.updateBuildConfiguration": "interactive",
+    "C_Cpp.default.compilerPath": "/usr/bin/g++-11",
+    "files.associations": {
+        "ostream": "cpp"
+    }
+}

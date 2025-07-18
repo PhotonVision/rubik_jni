@@ -1,0 +1,26 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/src/main/native/include",
+                "/usr/lib/jvm/default-java/include",
+                "/usr/lib/jvm/default-java/include/linux",
+                "${workspaceFolder}/build/_deps/opencv_header-src",
+                "${workspaceFolder}/build/_deps/tensorflow-src",
+                "${workspaceFolder}/build/_deps/tensorflow-src/tensorflow/lite",
+                "${workspaceFolder}/build/_deps/tensorflow-src/tensorflow/lite/c"
+            ],
+            "defines": [
+                "TF_LITE_STATIC_MEMORY"
+            ],
+            "compilerPath": "/usr/bin/g++",
+            "cStandard": "c17",
+            "cppStandard": "c++14",
+            "intelliSenseMode": "linux-gcc-x64",
+            "compileCommands": "${workspaceFolder}/build/compile_commands.json"
+        }
+    ],
+    "version": 4
+}
