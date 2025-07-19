@@ -271,7 +271,7 @@ extern "C"
 	}
 
 	JNIEXPORT jobjectArray JNICALL
-	Java_org_photonvision_rubikjni_RubikJNI_detect(JNIEnv *env, jobject obj, jlong handle, jlong input_cvmat_ptr)
+	Java_org_photonvision_rubikjni_RubikJNI_detect(JNIEnv *env, jobject obj, jlong handle, jlong input_cvmat_ptr, jdouble boxThresh)
 	{
 		TfLiteInstance *instance = getInstance(handle);
 		if (!instance || !instance->interpreter)
@@ -452,6 +452,12 @@ extern "C"
 					maxConfidence = confidence;
 					bestClass = cls;
 				}
+			}
+
+			// Skip if no class has confidence above threshold
+			if (maxConfidence < boxThresh)
+			{
+				continue;
 			}
 
 			// Convert center coordinates and dimensions to corner coordinates

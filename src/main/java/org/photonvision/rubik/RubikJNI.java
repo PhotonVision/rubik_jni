@@ -80,14 +80,14 @@ public class RubikJNI {
      * @param modelPath
      * @return A handle to the RubikJNI instance.
      */
-    private static native long create(String modelPath);
+    public static native long create(String modelPath);
 
     /**
      * Destroy the RubikJNI instance.
      * 
      * @param handle
      */
-    private static native void destroy(long handle);
+    public static native void destroy(long handle);
 
     /**
      * Detect in the given image
@@ -97,5 +97,5 @@ public class RubikJNI {
      * @return An array of {@link RubikJNI.RubikResult} objects containing the
      *         detection results.
      */
-    private static native RubikResult[] detect(long handle, long imagePtr);
+    public static native RubikResult[] detect(long handle, long imagePtr, double boxThresh);
 }

@@ -9,7 +9,7 @@ set(BUILD_SHARED_LIBS ON)
 # Cross-compilation setup
 if(CMAKE_CROSSCOMPILING)
     message(STATUS "Cross-compiling for ${CMAKE_SYSTEM_PROCESSOR}")
-    
+
     # Set the target architecture for OpenCV download
     if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
         set(OPENCV_ARCH "linuxarm64")
@@ -71,7 +71,7 @@ if(NOT CMAKE_CROSSCOMPILING OR CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64")
         GIT_TAG v2.15.0
     )
     FetchContent_MakeAvailable(tensorflow)
-    
+
     set(TENSORFLOW_INCLUDE_PATH "${tensorflow_SOURCE_DIR}")
     file(GLOB_RECURSE TENSORFLOW_LIB_PATH
         "${tensorflow_SOURCE_DIR}/bazel-bin/tensorflow/*.so"
