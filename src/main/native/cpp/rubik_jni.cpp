@@ -16,8 +16,8 @@
  */
 
 /*
-* NOTE INTELLISENSE WILL NOT WORK UNTIL THE PROJECT IS BUILT AT LEAST ONCE
-*/
+ * NOTE INTELLISENSE WILL NOT WORK UNTIL THE PROJECT IS BUILT AT LEAST ONCE
+ */
 
 #include <jni.h>
 #include <tensorflow/lite/c/c_api.h>
@@ -25,14 +25,13 @@
 #include <tensorflow/lite/delegates/external/external_delegate.h>
 #include <tensorflow/lite/version.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <iostream>
 #include <memory>
-#include <mutex>
 #include <unordered_map>
-#include <vector>
 #include <utility>
-#include <algorithm>
+#include <vector>
 
 #include <opencv2/imgproc.hpp>
 #include <opencv2/opencv.hpp>
@@ -49,37 +48,6 @@ typedef struct __detect_result_t {
   BOX_RECT box;
   float obj_conf;
 } detect_result_t;
-
-// Per-instance data structure
-struct TfLiteInstance {
-  TfLiteModel *model;
-  TfLiteInterpreter *interpreter;
-  TfLiteDelegate *delegate;
-
-  TfLiteInstance() : model(nullptr), interpreter(nullptr), delegate(nullptr) {}
-
-  ~TfLiteInstance() { cleanup(); }
-
-  void cleanup() {
-    if (interpreter) {
-      TfLiteInterpreterDelete(interpreter);
-      interpreter = nullptr;
-    }
-    if (delegate) {
-      TfLiteExternalDelegateDelete(delegate);
-      delegate = nullptr;
-    }
-    if (model) {
-      TfLiteModelDelete(model);
-      model = nullptr;
-    }
-  }
-};
-
-// Global instance management
-static std::unordered_map<jlong, std::unique_ptr<TfLiteInstance>> instances;
-static std::mutex instanceMutex;
-static jlong nextInstanceId = 1;
 
 // JNI class reference (this can be global since it's shared)
 static jclass detectionResultClass = nullptr;
@@ -120,10 +88,6 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved) {
       detectionResultClass = nullptr;
     }
   }
-
-  // Clean up all remaining instances
-  std::lock_guard<std::mutex> lock(instanceMutex);
-  instances.clear();
 }
 
 static jobject MakeJObject(JNIEnv *env, const detect_result_t &result) {
@@ -145,13 +109,6 @@ static jobject MakeJObject(JNIEnv *env, const detect_result_t &result) {
                         result.obj_conf, result.id);
 }
 
-// Helper function to get instance from handle
-static TfLiteInstance *getInstance(jlong handle) {
-  std::lock_guard<std::mutex> lock(instanceMutex);
-  auto it = instances.find(handle);
-  return (it != instances.end()) ? it->second.get() : nullptr;
-}
-
 /*
  * Class:     org_photonvision_rubikjni_RubikJNI
  * Method:    create
@@ -168,12 +125,9 @@ Java_org_photonvision_rubikjni_RubikJNI_create
     return 0;
   }
 
-  // Create new instance
-  auto instance = std::make_unique<TfLiteInstance>();
-
   // Load the model
-  instance->model = TfLiteModelCreateFromFile(model_name);
-  if (!instance->model) {
+  TfLiteModel *model = TfLiteModelCreateFromFile(model_name);
+  if (!model) {
     std::printf("ERROR: Failed to load model file '%s'\n", model_name);
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
@@ -194,9 +148,9 @@ Java_org_photonvision_rubikjni_RubikJNI_create
   TfLiteExternalDelegateOptionsInsert(delegateOpts, "backend_type", "htp");
 
   // Create the delegate
-  instance->delegate = TfLiteExternalDelegateCreate(delegateOpts);
+  TfLiteDelegate *delegate = TfLiteExternalDelegateCreate(delegateOpts);
 
-  if (!instance->delegate) {
+  if (!delegate) {
     std::printf("ERROR: Failed to create external delegate\n");
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
@@ -212,29 +166,29 @@ Java_org_photonvision_rubikjni_RubikJNI_create
     return 0;
   }
 
-  TfLiteInterpreterOptionsAddDelegate(interpreterOpts, instance->delegate);
+  TfLiteInterpreterOptionsAddDelegate(interpreterOpts, delegate);
 
   // Create the interpreter
-  instance->interpreter =
-      TfLiteInterpreterCreate(instance->model, interpreterOpts);
+  TfLiteInterpreter *interpreter =
+      TfLiteInterpreterCreate(model, interpreterOpts);
   TfLiteInterpreterOptionsDelete(interpreterOpts);
 
-  if (!instance->interpreter) {
+  if (!interpreter) {
     std::printf("ERROR: Failed to create interpreter\n");
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
   }
 
   // Modify graph with delegate
-  if (TfLiteInterpreterModifyGraphWithDelegate(
-          instance->interpreter, instance->delegate) != kTfLiteOk) {
+  if (TfLiteInterpreterModifyGraphWithDelegate(interpreter, delegate) !=
+      kTfLiteOk) {
     std::printf("ERROR: Failed to modify graph with delegate\n");
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
   }
 
   // Allocate tensors
-  if (TfLiteInterpreterAllocateTensors(instance->interpreter) != kTfLiteOk) {
+  if (TfLiteInterpreterAllocateTensors(interpreter) != kTfLiteOk) {
     std::printf("ERROR: Failed to allocate tensors\n");
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
@@ -242,18 +196,13 @@ Java_org_photonvision_rubikjni_RubikJNI_create
 
   env->ReleaseStringUTFChars(modelPath, model_name);
 
-  // Store instance and return handle
-  jlong handle;
-  {
-    std::lock_guard<std::mutex> lock(instanceMutex);
-    handle = nextInstanceId++;
-    instances[handle] = move(instance);
-  }
+  jlong interpreterPtr = reinterpret_cast<jlong>(interpreter);
 
   std::printf("INFO: TensorFlow Lite initialization completed successfully "
               "(handle: %ld)\n",
-              handle);
-  return handle;
+              interpreterPtr);
+
+  return interpreterPtr;
 }
 
 /*
@@ -263,23 +212,19 @@ Java_org_photonvision_rubikjni_RubikJNI_create
  */
 JNIEXPORT void JNICALL
 Java_org_photonvision_rubikjni_RubikJNI_destroy
-  (JNIEnv *env, jclass, jlong handle)
+  (JNIEnv *env, jclass, jlong interpreterPtr)
 {
-  if (handle == 0) {
-    std::printf("WARNING: Attempted to destroy invalid handle (0)\n");
+  TfLiteInterpreter *interpreter =
+      reinterpret_cast<TfLiteInterpreter *>(interpreterPtr);
+  if (!interpreter) {
+    std::cerr << "ERROR: Invalid interpreter handle" << std::endl;
     return;
   }
 
-  std::lock_guard<std::mutex> lock(instanceMutex);
-  auto it = instances.find(handle);
-  if (it != instances.end()) {
-    std::printf("INFO: Destroying TensorFlow Lite instance (handle: %ld)\n",
-                handle);
-    instances.erase(it);
-  } else {
-    std::printf("WARNING: Attempted to destroy non-existent handle: %ld\n",
-                handle);
-  }
+  // Delete the interpreter
+  TfLiteInterpreterDelete(interpreter);
+
+  std::printf("INFO: TensorFlow Lite interpreter destroyed successfully\n");
 }
 
 /*
@@ -289,13 +234,15 @@ Java_org_photonvision_rubikjni_RubikJNI_destroy
  */
 JNIEXPORT jobjectArray JNICALL
 Java_org_photonvision_rubikjni_RubikJNI_detect
-  (JNIEnv *env, jobject obj, jlong handle, jlong input_cvmat_ptr,
+  (JNIEnv *env, jobject obj, jlong interpreterPtr, jlong input_cvmat_ptr,
    jdouble boxThresh)
 {
-  TfLiteInstance *instance = getInstance(handle);
-  if (!instance || !instance->interpreter) {
-    std::cerr << "ERROR: Invalid handle or interpreter not initialized"
-              << std::endl;
+  // Check if the interpreter pointer is valid
+  TfLiteInterpreter *interpreter =
+      reinterpret_cast<TfLiteInterpreter *>(interpreterPtr);
+
+  if (!interpreter) {
+    std::cerr << "ERROR: Invalid interpreter handle" << std::endl;
     return nullptr;
   }
 
@@ -307,8 +254,7 @@ Java_org_photonvision_rubikjni_RubikJNI_detect
 
   // Get input tensor
 
-  int inputTensorIndex =
-      TfLiteInterpreterGetInputTensorIndex(instance->interpreter, 0);
+  int inputTensorIndex = TfLiteInterpreterGetInputTensorIndex(interpreter, 0);
 
   if (inputTensorIndex < 0) {
     std::cerr << "ERROR: Failed to get input tensor index" << std::endl;
@@ -316,7 +262,7 @@ Java_org_photonvision_rubikjni_RubikJNI_detect
   }
 
   TfLiteTensor *inputTensor =
-      TfLiteInterpreterGetInputTensor(instance->interpreter, inputTensorIndex);
+      TfLiteInterpreterGetInputTensor(interpreter, inputTensorIndex);
   if (!inputTensor) {
     std::cerr << "ERROR: Failed to get input tensor" << std::endl;
     return nullptr;
@@ -382,22 +328,21 @@ Java_org_photonvision_rubikjni_RubikJNI_detect
   }
 
   // Run inference
-  if (TfLiteInterpreterInvoke(instance->interpreter) != kTfLiteOk) {
+  if (TfLiteInterpreterInvoke(interpreter) != kTfLiteOk) {
     std::cerr << "ERROR: Failed to invoke interpreter" << std::endl;
     return nullptr;
   }
 
   // Get output tensor
 
-  int outputTensorIndex =
-      TfLiteInterpreterGetOutputTensorIndex(instance->interpreter, 0);
+  int outputTensorIndex = TfLiteInterpreterGetOutputTensorIndex(interpreter, 0);
   if (outputTensorIndex < 0) {
     std::cerr << "ERROR: Failed to get output tensor index" << std::endl;
     return nullptr;
   }
 
-  const TfLiteTensor *outputTensor = TfLiteInterpreterGetOutputTensor(
-      instance->interpreter, outputTensorIndex);
+  const TfLiteTensor *outputTensor =
+      TfLiteInterpreterGetOutputTensor(interpreter, outputTensorIndex);
   if (!outputTensor) {
     std::cerr << "ERROR: Failed to get output tensor" << std::endl;
     return nullptr;

@@ -77,24 +77,25 @@ public class RubikJNI {
      * Create a RubikJNI instance with the specified model path.
      *
      * @param modelPath
-     * @return A handle to the RubikJNI instance.
+     * @return A pointer to the tflite interpreter.
      */
     public static native long create(String modelPath);
 
     /**
      * Destroy the RubikJNI instance.
      *
-     * @param handle
+     * @param interpreterPtr The pointer to the tflite interpreter.
      */
-    public static native void destroy(long handle);
+    public static native void destroy(long interpreterPtr);
 
     /**
      * Detect in the given image
      *
-     * @param handle   The handle to the RubikJNI instance.
+     * @param interpreterPtr The pointer to the tflite interpreter.
      * @param imagePtr The pointer to the image data.
+     * @param boxThresh The threshold for the bounding box detection.
      * @return An array of {@link RubikJNI.RubikResult} objects containing the
      *         detection results.
      */
-    public static native RubikResult[] detect(long handle, long imagePtr, double boxThresh);
+    public static native RubikResult[] detect(long interpreterPtr, long imagePtr, double boxThresh);
 }
