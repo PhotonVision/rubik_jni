@@ -313,17 +313,19 @@ Java_org_photonvision_rubikjni_RubikJNI_detect
     rgbImage = *input_img;
   }
 
+  // TODO: Commenting out resizing for the time being, as it should be
+  // letterboxed. Leaving it in place as it might prove valuable in the future.
   // Resize image to match input tensor dimensions
-  cv::Mat resizedImage;
-  cv::resize(rgbImage, resizedImage, cv::Size(inputWidth, inputHeight));
+  // cv::Mat resizedImage;
+  // cv::resize(rgbImage, resizedImage, cv::Size(inputWidth, inputHeight));
   // Copy resized image data to input tensor
-  if (resizedImage.isContinuous()) {
-    std::memcpy(inputData, resizedImage.data,
-                resizedImage.total() * resizedImage.elemSize());
+  if (rgbImage.isContinuous()) {
+    std::memcpy(inputData, rgbImage.data,
+                rgbImage.total() * rgbImage.elemSize());
   } else {
-    for (int i = 0; i < resizedImage.rows; ++i) {
-      std::memcpy(inputData + i * resizedImage.step[0], resizedImage.ptr(i),
-                  resizedImage.cols * resizedImage.elemSize());
+    for (int i = 0; i < rgbImage.rows; ++i) {
+      std::memcpy(inputData + i * rgbImage.step[0], rgbImage.ptr(i),
+                  rgbImage.cols * rgbImage.elemSize());
     }
   }
 
@@ -349,8 +351,8 @@ Java_org_photonvision_rubikjni_RubikJNI_detect
   }
 
   // Check output tensor type
-  if (TfLiteTensorType(outputTensor) != kTfLiteFloat32) {
-    std::cerr << "ERROR: Output tensor is not of type kTfLiteFloat32"
+  if (TfLiteTensorType(outputTensor) != kTfLiteUInt8) {
+    std::cerr << "ERROR: Output tensor is not of type kTfLiteUInt8"
               << std::endl;
     return nullptr;
   }
