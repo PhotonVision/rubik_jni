@@ -6,6 +6,19 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS "-pthread")
 set(BUILD_SHARED_LIBS ON)
 
+if(ENABLE_ASAN)
+    message(STATUS "BUILD WITH ADDRESS SANITIZER")
+    set(CMAKE_C_FLAGS_DEBUG
+        "${CMAKE_C_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined"
+    )
+    set(CMAKE_CXX_FLAGS_DEBUG
+        "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined"
+    )
+    set(CMAKE_LINKER_FLAGS_DEBUG
+        "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined"
+    )
+endif()
+
 # Cross-compilation setup
 if(CMAKE_CROSSCOMPILING)
     message(STATUS "Cross-compiling for ${CMAKE_SYSTEM_PROCESSOR}")
@@ -77,12 +90,7 @@ if(NOT CMAKE_CROSSCOMPILING OR CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64")
     fetchcontent_makeavailable(tensorflow)
 
     set(TENSORFLOW_INCLUDE_PATH "${tensorflow_SOURCE_DIR}")
-    file(
-        GLOB_RECURSE TENSORFLOW_LIB_PATH
-        "${tensorflow_SOURCE_DIR}/bazel-bin/tensorflow/*.so"
-        "${tensorflow_SOURCE_DIR}/bazel-bin/tensorflow/*.dylib"
-        "${tensorflow_SOURCE_DIR}/bazel-bin/tensorflow/*.lib"
-    )
+    file(GLOB_RECURSE TENSORFLOW_LIB_PATH)
     message("Using TensorFlow include path: ${TENSORFLOW_INCLUDE_PATH}")
     message("Found TensorFlow libraries: ${TENSORFLOW_LIB_PATH}")
 else()
@@ -128,7 +136,7 @@ add_library(${PROJECT_NAME} src/main/native/cpp/rubik_jni.cpp)
 # Link libraries
 target_link_libraries(
     ${PROJECT_NAME}
-    PUBLIC Threads::Threads ${OPENCV_LIB_PATH} ${RGA_LIB} ${JNI_LIBRARIES}
+    PUBLIC Threads::Threads ${OPENCV_LIB_PATH} ${JNI_LIBRARIES}
 )
 
 # Add TensorFlow libraries if available
@@ -171,11 +179,3 @@ endif()
 
 include(GNUInstallDirs)
 install(TARGETS ${PROJECT_NAME})
-
-# Commented out test executable - uncomment and modify as needed
-# add_executable(main_test src/main/native/cpp/main_test.cc)
-# target_link_libraries(main_test ${PROJECT_NAME} ${RGA_LIB})
-# target_include_directories(main_test PRIVATE
-#     ${CMAKE_CURRENT_SOURCE_DIR}/src/main/native/include
-#     ${OPENCV_INCLUDE_PATH}
-# )
