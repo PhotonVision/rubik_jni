@@ -9,9 +9,15 @@ on:
     branches: [ "main" ]
 
 jobs:
+  validation:
+    name: "Validation"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: gradle/actions/wrapper-validation@v4
   build:
     runs-on: ubuntu-latest
-
+    needs: [validation]
     strategy:
       fail-fast: false
       matrix:
@@ -30,7 +36,7 @@ jobs:
             jar-name: "DebugWithAsan"
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -56,9 +62,9 @@ jobs:
 
     - run: find .
 
+# TODO: change publish back to this before merging ${{ (startsWith(github.event_name, 'push') && 'publish') || '' }}
     - run: |
-        chmod +x gradlew
-        ./gradlew build ${{ (startsWith(github.event_name, 'push') && 'publish') || '' }} -PArchOverride=linuxarm64 -PPublishType=${{ matrix.publish-type }} -x check
+        ./gradlew build publish -PArchOverride=linuxarm64 -PPublishType=${{ matrix.publish-type }} -x check
       env:
         ARTIFACTORY_API_KEY: ${{ secrets.ARTIFACTORY_API_KEY }}
 
