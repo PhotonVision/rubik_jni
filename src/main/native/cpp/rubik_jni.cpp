@@ -51,12 +51,20 @@ typedef struct __detect_result_t {
 
 // JNI class reference (this can be global since it's shared)
 static jclass detectionResultClass = nullptr;
+static jclass runtimeExceptionClass = nullptr;
 
 extern "C" {
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
   JNIEnv *env;
   if (vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) != JNI_OK) {
     return JNI_ERR;
+  }
+
+  // Cache exception classes
+  jclass localRuntimeClass = env->FindClass("java/lang/RuntimeException");
+  if (localRuntimeClass) {
+    runtimeExceptionClass = (jclass)env->NewGlobalRef(localRuntimeClass);
+    env->DeleteLocalRef(localRuntimeClass);
   }
 
   // Find the detection result class
@@ -109,6 +117,13 @@ static jobject MakeJObject(JNIEnv *env, const detect_result_t &result) {
                         result.obj_conf, result.id);
 }
 
+// Helper function to throw exceptions
+void ThrowRuntimeException(JNIEnv *env, const char *message) {
+  if (runtimeExceptionClass) {
+    env->ThrowNew(runtimeExceptionClass, message);
+  }
+}
+
 /*
  * Class:     org_photonvision_rubikjni_RubikJNI
  * Method:    create
@@ -122,6 +137,7 @@ Java_org_photonvision_rubikjni_RubikJNI_create
   if (model_name == nullptr) {
     std::cerr << "ERROR: Failed to retrieve model path from Java string."
               << std::endl;
+    ThrowRuntimeException(env, "Failed to retrieve model path");
     return 0;
   }
 
@@ -129,6 +145,7 @@ Java_org_photonvision_rubikjni_RubikJNI_create
   TfLiteModel *model = TfLiteModelCreateFromFile(model_name);
   if (!model) {
     std::printf("ERROR: Failed to load model file '%s'\n", model_name);
+    ThrowRuntimeException(env, "Failed to load model file");
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
   }
@@ -141,6 +158,7 @@ Java_org_photonvision_rubikjni_RubikJNI_create
   TfLiteExternalDelegateOptions *delegateOpts = &delegateOptsValue;
   if (!delegateOpts) {
     std::printf("ERROR: Failed to create delegate options\n");
+    ThrowRuntimeException(env, "Failed to create delegate options");
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
   }
@@ -152,6 +170,7 @@ Java_org_photonvision_rubikjni_RubikJNI_create
 
   if (!delegate) {
     std::printf("ERROR: Failed to create external delegate\n");
+    ThrowRuntimeException(env, "Failed to create external delegate");
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
   }
@@ -162,6 +181,8 @@ Java_org_photonvision_rubikjni_RubikJNI_create
   TfLiteInterpreterOptions *interpreterOpts = TfLiteInterpreterOptionsCreate();
   if (!interpreterOpts) {
     std::printf("ERROR: Failed to create interpreter options\n");
+    ThrowRuntimeException(env, "Failed to create interpreter options");
+    TfLiteExternalDelegateDelete(delegate);
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
   }
@@ -175,6 +196,8 @@ Java_org_photonvision_rubikjni_RubikJNI_create
 
   if (!interpreter) {
     std::printf("ERROR: Failed to create interpreter\n");
+    ThrowRuntimeException(env, "Failed to create interpreter");
+    TfLiteExternalDelegateDelete(delegate);
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
   }
@@ -183,6 +206,9 @@ Java_org_photonvision_rubikjni_RubikJNI_create
   if (TfLiteInterpreterModifyGraphWithDelegate(interpreter, delegate) !=
       kTfLiteOk) {
     std::printf("ERROR: Failed to modify graph with delegate\n");
+    ThrowRuntimeException(env, "Failed to modify graph with delegate");
+    TfLiteInterpreterDelete(interpreter);
+    TfLiteExternalDelegateDelete(delegate);
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
   }
@@ -190,6 +216,9 @@ Java_org_photonvision_rubikjni_RubikJNI_create
   // Allocate tensors
   if (TfLiteInterpreterAllocateTensors(interpreter) != kTfLiteOk) {
     std::printf("ERROR: Failed to allocate tensors\n");
+    ThrowRuntimeException(env, "Failed to allocate tensors");
+    TfLiteInterpreterDelete(interpreter);
+    TfLiteExternalDelegateDelete(delegate);
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
   }
@@ -218,6 +247,7 @@ Java_org_photonvision_rubikjni_RubikJNI_destroy
       reinterpret_cast<TfLiteInterpreter *>(interpreterPtr);
   if (!interpreter) {
     std::cerr << "ERROR: Invalid interpreter handle" << std::endl;
+    ThrowRuntimeException(env, "Invalid interpreter handle");
     return;
   }
 
@@ -243,12 +273,14 @@ Java_org_photonvision_rubikjni_RubikJNI_detect
 
   if (!interpreter) {
     std::cerr << "ERROR: Invalid interpreter handle" << std::endl;
+    ThrowRuntimeException(env, "Invalid interpreter handle");
     return nullptr;
   }
 
   cv::Mat *input_img = reinterpret_cast<cv::Mat *>(input_cvmat_ptr);
   if (!input_img || input_img->empty()) {
     std::cerr << "ERROR: Invalid input image" << std::endl;
+    ThrowRuntimeException(env, "Invalid input image");
     return nullptr;
   }
 
@@ -258,6 +290,7 @@ Java_org_photonvision_rubikjni_RubikJNI_detect
 
   if (inputTensorIndex < 0) {
     std::cerr << "ERROR: Failed to get input tensor index" << std::endl;
+    ThrowRuntimeException(env, "Failed to get input tensor index");
     return nullptr;
   }
 
@@ -265,12 +298,14 @@ Java_org_photonvision_rubikjni_RubikJNI_detect
       TfLiteInterpreterGetInputTensor(interpreter, inputTensorIndex);
   if (!inputTensor) {
     std::cerr << "ERROR: Failed to get input tensor" << std::endl;
+    ThrowRuntimeException(env, "Failed to get input tensor");
     return nullptr;
   }
 
   // Check input tensor type
   if (TfLiteTensorType(inputTensor) != kTfLiteUInt8) {
     std::cerr << "ERROR: Input tensor is not of type kTfLiteUInt8" << std::endl;
+    ThrowRuntimeException(env, "Input tensor is not of type kTfLiteUInt8");
     return nullptr;
   }
 
@@ -279,6 +314,7 @@ Java_org_photonvision_rubikjni_RubikJNI_detect
   if (inputDims < 3) {
     std::cerr << "ERROR: Input tensor does not have enough dimensions"
               << std::endl;
+    ThrowRuntimeException(env, "Input tensor does not have enough dimensions");
     return nullptr;
   }
 
@@ -292,6 +328,9 @@ Java_org_photonvision_rubikjni_RubikJNI_detect
     std::cerr << "ERROR: Input image dimensions do not match expected input "
                  "tensor dimensions"
               << std::endl;
+    ThrowRuntimeException(
+        env,
+        "Input image dimensions do not match expected input tensor dimensions");
     return nullptr;
   }
 
@@ -299,6 +338,7 @@ Java_org_photonvision_rubikjni_RubikJNI_detect
   uint8_t *inputData = static_cast<uint8_t *>(TfLiteTensorData(inputTensor));
   if (!inputData) {
     std::cerr << "ERROR: Failed to get input tensor data pointer" << std::endl;
+    ThrowRuntimeException(env, "Failed to get input tensor data pointer");
     return nullptr;
   }
 
@@ -332,6 +372,7 @@ Java_org_photonvision_rubikjni_RubikJNI_detect
   // Run inference
   if (TfLiteInterpreterInvoke(interpreter) != kTfLiteOk) {
     std::cerr << "ERROR: Failed to invoke interpreter" << std::endl;
+    ThrowRuntimeException(env, "Failed to invoke interpreter");
     return nullptr;
   }
 
@@ -340,6 +381,7 @@ Java_org_photonvision_rubikjni_RubikJNI_detect
   int outputTensorIndex = TfLiteInterpreterGetOutputTensorIndex(interpreter, 0);
   if (outputTensorIndex < 0) {
     std::cerr << "ERROR: Failed to get output tensor index" << std::endl;
+    ThrowRuntimeException(env, "Failed to get output tensor index");
     return nullptr;
   }
 
@@ -347,6 +389,7 @@ Java_org_photonvision_rubikjni_RubikJNI_detect
       TfLiteInterpreterGetOutputTensor(interpreter, outputTensorIndex);
   if (!outputTensor) {
     std::cerr << "ERROR: Failed to get output tensor" << std::endl;
+    ThrowRuntimeException(env, "Failed to get output tensor");
     return nullptr;
   }
 
@@ -354,6 +397,7 @@ Java_org_photonvision_rubikjni_RubikJNI_detect
   if (TfLiteTensorType(outputTensor) != kTfLiteUInt8) {
     std::cerr << "ERROR: Output tensor is not of type kTfLiteUInt8"
               << std::endl;
+    ThrowRuntimeException(env, "Output tensor is not of type kTfLiteUInt8");
     return nullptr;
   }
 
@@ -362,6 +406,7 @@ Java_org_photonvision_rubikjni_RubikJNI_detect
   if (outputDims < 2) {
     std::cerr << "ERROR: Output tensor does not have enough dimensions"
               << std::endl;
+    ThrowRuntimeException(env, "Output tensor does not have enough dimensions");
     return nullptr;
   }
 
@@ -370,6 +415,7 @@ Java_org_photonvision_rubikjni_RubikJNI_detect
   int outputChannels = TfLiteTensorDim(outputTensor, 3);
   if (outputHeight <= 0 || outputWidth <= 0 || outputChannels <= 0) {
     std::cerr << "ERROR: Invalid output tensor dimensions" << std::endl;
+    ThrowRuntimeException(env, "Invalid output tensor dimensions");
     return nullptr;
   }
 
@@ -377,6 +423,7 @@ Java_org_photonvision_rubikjni_RubikJNI_detect
   float *outputData = static_cast<float *>(TfLiteTensorData(outputTensor));
   if (!outputData) {
     std::cerr << "ERROR: Failed to get output tensor data pointer" << std::endl;
+    ThrowRuntimeException(env, "Failed to get output tensor data pointer");
     return nullptr;
   }
 
@@ -458,6 +505,7 @@ Java_org_photonvision_rubikjni_RubikJNI_detect
       env->NewObjectArray(results.size(), detectionResultClass, nullptr);
   if (!resultArray) {
     std::cerr << "ERROR: Failed to create result array" << std::endl;
+    ThrowRuntimeException(env, "Failed to create result array");
     return nullptr;
   }
 
@@ -466,6 +514,8 @@ Java_org_photonvision_rubikjni_RubikJNI_detect
     if (!jResult) {
       std::cerr << "ERROR: Failed to create Java object for result " << i
                 << std::endl;
+      ThrowRuntimeException(
+          env, "Failed to create Java object for detection result");
       continue;
     }
     env->SetObjectArrayElement(resultArray, i, jResult);
