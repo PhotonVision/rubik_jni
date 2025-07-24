@@ -18,6 +18,7 @@ modifiableFileExclude {
   \.dll$
   \.webp$
   \.ico$
+  \.tflite$
   gradlew
 }
 

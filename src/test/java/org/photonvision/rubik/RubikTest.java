@@ -32,6 +32,7 @@ import org.opencv.core.Size;
 import org.opencv.dnn.Dnn;
 import org.opencv.dnn.Net;
 import org.opencv.imgcodecs.Imgcodecs;
+import org.photonvision.rubik.RubikJNI.RubikResult;
 
 import edu.wpi.first.cscore.CvSink;
 import edu.wpi.first.cscore.CvSource;
@@ -50,9 +51,31 @@ public class RubikTest {
         System.out.println(Core.getBuildInformation());
         System.out.println(Core.OpenCLApiCallError);
 
+        System.out.println("Loading rubik_jni");
+        System.load("/home/ubuntu/rubik_jni/cmake_build/librubik_jni.so");
 
         System.out.println("Loading bus");
-        Mat img = Imgcodecs.imread("silly_notes.png");
-        Mat img2 = Imgcodecs.imread("silly_notes2.png");
+        Mat img = Imgcodecs.imread("src/test/resources/bus.jpg");
+
+        if (img.empty()) {
+            throw new RuntimeException("Failed to load image");
+        }
+
+        System.out.println("Image loaded: " + img.size() + " " + img.type());
+
+        System.out.println("Creating Rubik detector");
+        long ptr = RubikJNI.create("src/test/resources/basic.tflite");
+
+        if (ptr == 0) {
+            throw new RuntimeException("Failed to create Rubik detector");
+        }
+
+        System.out.println("Rubik detector created: " + ptr);
+        RubikResult[] ret = RubikJNI.detect(ptr, img.getNativeObjAddr(), 0.5f);
+
+        System.out.println("Detection results: " + Arrays.toString(ret));
+
+        System.out.println("Releasing Rubik detector");
+        RubikJNI.destroy(ptr);
     }
 }
