@@ -125,12 +125,12 @@ void ThrowRuntimeException(JNIEnv *env, const char *message) {
 }
 
 /*
- * Class:     org_photonvision_rubikjni_RubikJNI
+ * Class:     org_photonvision_rubik_RubikJNI
  * Method:    create
  * Signature: (Ljava/lang/String;)J
  */
 JNIEXPORT jlong JNICALL
-Java_org_photonvision_rubikjni_RubikJNI_create
+Java_org_photonvision_rubik_RubikJNI_create
   (JNIEnv *env, jobject obj, jstring modelPath)
 {
   const char *model_name = env->GetStringUTFChars(modelPath, nullptr);
@@ -235,12 +235,12 @@ Java_org_photonvision_rubikjni_RubikJNI_create
 }
 
 /*
- * Class:     org_photonvision_rubikjni_RubikJNI
+ * Class:     org_photonvision_rubik_RubikJNI
  * Method:    destroy
  * Signature: (J)V
  */
 JNIEXPORT void JNICALL
-Java_org_photonvision_rubikjni_RubikJNI_destroy
+Java_org_photonvision_rubik_RubikJNI_destroy
   (JNIEnv *env, jclass, jlong interpreterPtr)
 {
   TfLiteInterpreter *interpreter =
@@ -258,12 +258,12 @@ Java_org_photonvision_rubikjni_RubikJNI_destroy
 }
 
 /*
- * Class:     org_photonvision_rubikjni_RubikJNI
+ * Class:     org_photonvision_rubik_RubikJNI
  * Method:    detect
  * Signature: (JJD)[Ljava/lang/Object;
  */
 JNIEXPORT jobjectArray JNICALL
-Java_org_photonvision_rubikjni_RubikJNI_detect
+Java_org_photonvision_rubik_RubikJNI_detect
   (JNIEnv *env, jobject obj, jlong interpreterPtr, jlong input_cvmat_ptr,
    jdouble boxThresh)
 {
