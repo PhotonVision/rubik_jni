@@ -33,7 +33,7 @@ jobs:
       - name: Set up Python 3.8
         uses: actions/setup-python@v4
         with:
-          python-version: 3.11
+          python-version: 3.13
       - name: Install wpiformat
         run: pip3 install wpiformat==2025.33
       - name: Run
