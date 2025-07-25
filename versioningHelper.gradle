@@ -1,0 +1,56 @@
+import java.nio.file.Path
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+
+gradle.allprojects {
+    ext.getCurrentVersion = {
+        ->
+        def stdout = new ByteArrayOutputStream()
+        String tagIsh
+        try {
+    exec {
+        commandLine 'git', 'describe', '--tags', "--match=v*"
+        standardOutput = stdout
+        errorOutput = new ByteArrayOutputStream()
+    }
+    tagIsh = stdout.toString().trim().toLowerCase()
+} catch (Exception e) {
+    println("Git describe failed: " + e.getMessage())
+    println("Current directory: " + System.getProperty("user.dir"))
+    
+    // Try alternative git command
+    try {
+        stdout.reset()
+        exec {
+            commandLine 'git', 'rev-parse', '--short', 'HEAD'
+            standardOutput = stdout
+        }
+        tagIsh = "dev-" + stdout.toString().trim()
+    } catch (Exception e2) {
+        tagIsh = "dev-v2024.1.0"  // Final fallback
+    }
+}
+
+        // Dev tags: v2021.1.6-3-gf922466d
+        // We're specifically looking to capture the middle -3-
+        boolean isDev = tagIsh.matches(".*-[0-9]*-g[0-9a-f]*")
+        if (isDev && !tagIsh.startsWith("dev-")) tagIsh = "dev-" + tagIsh
+        println("Picked up version: " + tagIsh)
+        return tagIsh
+    }
+
+    if (!ext.has("versionString")) {
+        ext.versionString = getCurrentVersion()
+    }
+
+    ext.writePhotonVersionFile = {File versionFileIn, Path path, String version ->
+        println("Writing " + version + " to " + path.toAbsolutePath().toString())
+        String date = DateTimeFormatter.ofPattern("yyyy-M-d hh:mm:ss").format(LocalDateTime.now())
+        File versionFileOut = new File(path.toAbsolutePath().toString())
+        versionFileOut.delete()
+        def read = versionFileIn.text.replace('${version}', version).replace('${date}', date)
+        if (!versionFileOut.parentFile.exists()) versionFileOut.parentFile.mkdirs()
+        if (!versionFileOut.exists()) versionFileOut.createNewFile()
+        versionFileOut.write(read)
+    }
+}
