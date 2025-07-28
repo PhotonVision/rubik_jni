@@ -25,6 +25,17 @@ public class RubikJNI {
      * A class representing the result of a detection.
      */
     public static class RubikResult {
+        /**
+         * Create a RubikResult with the specified bounding box coordinates, confidence,
+         * and class ID.
+         *
+         * @param left     The left coordinate of the bounding box.
+         * @param top      The top coordinate of the bounding box.
+         * @param right    The right coordinate of the bounding box.
+         * @param bottom   The bottom coordinate of the bounding box.
+         * @param conf     The confidence score of the detection.
+         * @param class_id The class ID of the detected object.
+         */
         public RubikResult(
                 int left, int top, int right, int bottom, float conf, int class_id) {
             this.conf = conf;
@@ -77,16 +88,16 @@ public class RubikJNI {
      * Create a RubikJNI instance with the specified model path.
      *
      * @param modelPath
-     * @return A pointer to the tflite interpreter.
+     * @return An array of pointers, where the elements point to the interpreter, delegate, and model; respectively.
      */
-    public static native long create(String modelPath);
+    public static native long[] create(String modelPath);
 
     /**
      * Destroy the RubikJNI instance.
      *
-     * @param interpreterPtr The pointer to the tflite interpreter.
+     * @param ptrs The list of pointers to the interpreter, delegate, and model; in that order.
      */
-    public static native void destroy(long interpreterPtr);
+    public static native void destroy(long[] ptrs);
 
     /**
      * Detect in the given image

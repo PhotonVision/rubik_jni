@@ -129,7 +129,7 @@ void ThrowRuntimeException(JNIEnv *env, const char *message) {
  * Method:    create
  * Signature: (Ljava/lang/String;)J
  */
-JNIEXPORT jlong JNICALL
+JNIEXPORT jarray JNICALL
 Java_org_photonvision_rubik_RubikJNI_create
   (JNIEnv *env, jobject obj, jstring modelPath)
 {
@@ -225,13 +225,26 @@ Java_org_photonvision_rubik_RubikJNI_create
 
   env->ReleaseStringUTFChars(modelPath, model_name);
 
-  jlong interpreterPtr = reinterpret_cast<jlong>(interpreter);
+  jlongArray ptrs = env->NewLongArray(3);
+  if (!ptrs) {
+    std::cerr << "ERROR: Failed to create jlongArray" << std::endl;
+    ThrowRuntimeException(env, "Failed to create jlongArray");
+    TfLiteInterpreterDelete(interpreter);
+    TfLiteExternalDelegateDelete(delegate);
+    TfLiteModelDelete(model);
+    return nullptr;
+  }
 
-  std::printf("INFO: TensorFlow Lite initialization completed successfully "
-              "(handle: %ld)\n",
-              interpreterPtr);
+  jlong values[3];
+  values[0] = reinterpret_cast<jlong>(interpreter);
+  values[1] = reinterpret_cast<jlong>(delegate);
+  values[2] = reinterpret_cast<jlong>(model);
 
-  return interpreterPtr;
+  env->SetLongArrayRegion(ptrs, 0, 3, values);
+
+  std::printf("INFO: TensorFlow Lite initialization completed successfully");
+
+  return ptrs;
 }
 
 /*
@@ -241,20 +254,37 @@ Java_org_photonvision_rubik_RubikJNI_create
  */
 JNIEXPORT void JNICALL
 Java_org_photonvision_rubik_RubikJNI_destroy
-  (JNIEnv *env, jclass, jlong interpreterPtr)
+  (JNIEnv *env, jclass, jlongArray ptrs)
 {
   TfLiteInterpreter *interpreter =
-      reinterpret_cast<TfLiteInterpreter *>(interpreterPtr);
+      reinterpret_cast<TfLiteInterpreter *>(env->GetLongArrayElements(ptrs, nullptr)[0]);
   if (!interpreter) {
     std::cerr << "ERROR: Invalid interpreter handle" << std::endl;
     ThrowRuntimeException(env, "Invalid interpreter handle");
     return;
   }
 
-  // Delete the interpreter
-  TfLiteInterpreterDelete(interpreter);
+  TfLiteDelegate *delegate =
+      reinterpret_cast<TfLiteDelegate *>(env->GetLongArrayElements(ptrs, nullptr)[1]);
+  if (!delegate) {
+    std::cerr << "ERROR: Invalid delegate handle" << std::endl;
+    ThrowRuntimeException(env, "Invalid delegate handle");
+    return;
+  }
 
-  std::printf("INFO: TensorFlow Lite interpreter destroyed successfully\n");
+  TfLiteModel *model =
+      reinterpret_cast<TfLiteModel *>(env->GetLongArrayElements(ptrs, nullptr)[2]);
+  if (!model) {
+    std::cerr << "ERROR: Invalid model handle" << std::endl;
+    ThrowRuntimeException(env, "Invalid model handle");
+    return;
+  }
+
+  TfLiteInterpreterDelete(interpreter);
+  TfLiteExternalDelegateDelete(delegate);
+  TfLiteModelDelete(model);
+
+  std::printf("INFO: Object Detection instance destroyed successfully\n");
 }
 
 /*

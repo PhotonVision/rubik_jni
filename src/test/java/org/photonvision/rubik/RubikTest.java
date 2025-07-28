@@ -64,18 +64,20 @@ public class RubikTest {
         System.out.println("Image loaded: " + img.size() + " " + img.type());
 
         System.out.println("Creating Rubik detector");
-        long ptr = RubikJNI.create("src/test/resources/basic.tflite");
+        long[] ptrs = RubikJNI.create("src/test/resources/basic.tflite");
 
-        if (ptr == 0) {
-            throw new RuntimeException("Failed to create Rubik detector");
+        for (long ptr : ptrs) {
+            if (ptr == 0) {
+                throw new RuntimeException("Failed to create Rubik detector");
+            }
         }
 
-        System.out.println("Rubik detector created: " + ptr);
-        RubikResult[] ret = RubikJNI.detect(ptr, img.getNativeObjAddr(), 0.5f);
+        System.out.println("Rubik detector created: " + ptrs.toString());
+        RubikResult[] ret = RubikJNI.detect(ptrs[0], img.getNativeObjAddr(), 0.5f);
 
         System.out.println("Detection results: " + Arrays.toString(ret));
 
         System.out.println("Releasing Rubik detector");
-        RubikJNI.destroy(ptr);
+        RubikJNI.destroy(ptrs);
     }
 }
