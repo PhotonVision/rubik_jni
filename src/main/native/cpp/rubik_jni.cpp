@@ -53,6 +53,91 @@ typedef struct __detect_result_t {
 static jclass detectionResultClass = nullptr;
 static jclass runtimeExceptionClass = nullptr;
 
+// Guesses the width, height, and channels of a tensor if it were an image.
+// Returns false on failure.
+bool tensor_image_dims(const TfLiteTensor *tensor, int *w, int *h, int *c) {
+  int n = TfLiteTensorNumDims(tensor);
+  int cursor = 0;
+
+  for (int i = 0; i < n; i++) {
+    int dim = TfLiteTensorDim(tensor, i);
+    if (dim == 0)
+      return false;
+    if (dim == 1)
+      continue;
+
+    switch (cursor++) {
+    case 0:
+      if (w)
+        *w = dim;
+      break;
+    case 1:
+      if (h)
+        *h = dim;
+      break;
+    case 2:
+      if (c)
+        *c = dim;
+      break;
+    default:
+      return false;
+      break;
+    }
+  }
+
+  // Ensure that we at least have the width and height.
+  if (cursor < 2)
+    return false;
+  // If we don't have the number of channels, then assume there's only one.
+  if (cursor == 2 && c)
+    *c = 1;
+  // Ensure we have no more than 4 image channels.
+  if (*c > 4)
+    return false;
+  // The tensor dimension appears coherent.
+  return true;
+}
+
+void print_tensor_info(const TfLiteTensor *tensor) {
+  size_t tensor_size = TfLiteTensorByteSize(tensor);
+
+  std::printf("INFO:   Size: %lu bytes\n", tensor_size);
+
+  int num_dims = TfLiteTensorNumDims(tensor);
+
+  std::printf("INFO:   Dimension: ");
+
+  for (int i = 0; i < num_dims; i++)
+    std::printf("%d%s", TfLiteTensorDim(tensor, i),
+                i == num_dims - 1 ? "" : "x");
+
+  std::printf("\n");
+
+  switch (TfLiteTensorType(tensor)) {
+  case kTfLiteFloat16:
+    std::printf("INFO:   Type: f16\n");
+    break;
+  case kTfLiteFloat32:
+    std::printf("INFO:   Type: f32\n");
+    break;
+  case kTfLiteUInt8:
+    std::printf("INFO:   Type: u8 \n");
+    break;
+  case kTfLiteUInt32:
+    std::printf("INFO:   Type: u32\n");
+    break;
+  case kTfLiteInt8:
+    std::printf("INFO:   Type: i8 \n");
+    break;
+  case kTfLiteInt32:
+    std::printf("INFO:   Type: i32\n");
+    break;
+  default:
+    std::printf("INFO:   Type: ???\n");
+    break;
+  }
+}
+
 extern "C" {
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
   JNIEnv *env;
@@ -127,7 +212,7 @@ void ThrowRuntimeException(JNIEnv *env, const char *message) {
 /*
  * Class:     org_photonvision_rubik_RubikJNI
  * Method:    create
- * Signature: (Ljava/lang/String;)J
+ * Signature: (Ljava/lang/String;)?
  */
 JNIEXPORT jarray JNICALL
 Java_org_photonvision_rubik_RubikJNI_create
@@ -242,7 +327,7 @@ Java_org_photonvision_rubik_RubikJNI_create
 
   env->SetLongArrayRegion(ptrs, 0, 3, values);
 
-  std::printf("INFO: TensorFlow Lite initialization completed successfully");
+  std::printf("INFO: TensorFlow Lite initialization completed successfully\n");
 
   return ptrs;
 }
@@ -250,30 +335,30 @@ Java_org_photonvision_rubik_RubikJNI_create
 /*
  * Class:     org_photonvision_rubik_RubikJNI
  * Method:    destroy
- * Signature: (J)V
+ * Signature: ([J)V
  */
 JNIEXPORT void JNICALL
 Java_org_photonvision_rubik_RubikJNI_destroy
   (JNIEnv *env, jclass, jlongArray ptrs)
 {
-  TfLiteInterpreter *interpreter =
-      reinterpret_cast<TfLiteInterpreter *>(env->GetLongArrayElements(ptrs, nullptr)[0]);
+  TfLiteInterpreter *interpreter = reinterpret_cast<TfLiteInterpreter *>(
+      env->GetLongArrayElements(ptrs, nullptr)[0]);
   if (!interpreter) {
     std::cerr << "ERROR: Invalid interpreter handle" << std::endl;
     ThrowRuntimeException(env, "Invalid interpreter handle");
     return;
   }
 
-  TfLiteDelegate *delegate =
-      reinterpret_cast<TfLiteDelegate *>(env->GetLongArrayElements(ptrs, nullptr)[1]);
+  TfLiteDelegate *delegate = reinterpret_cast<TfLiteDelegate *>(
+      env->GetLongArrayElements(ptrs, nullptr)[1]);
   if (!delegate) {
     std::cerr << "ERROR: Invalid delegate handle" << std::endl;
     ThrowRuntimeException(env, "Invalid delegate handle");
     return;
   }
 
-  TfLiteModel *model =
-      reinterpret_cast<TfLiteModel *>(env->GetLongArrayElements(ptrs, nullptr)[2]);
+  TfLiteModel *model = reinterpret_cast<TfLiteModel *>(
+      env->GetLongArrayElements(ptrs, nullptr)[2]);
   if (!model) {
     std::cerr << "ERROR: Invalid model handle" << std::endl;
     ThrowRuntimeException(env, "Invalid model handle");
@@ -307,6 +392,69 @@ Java_org_photonvision_rubik_RubikJNI_detect
     return nullptr;
   }
 
+  /* Get the tensor info. */
+
+  // Input:
+
+  unsigned int n_tensors_in = TfLiteInterpreterGetInputTensorCount(interpreter);
+
+  if (n_tensors_in != 1) {
+    std::cerr << "ERROR: expected only 1 input tensor, got " << n_tensors_in
+              << std::endl;
+    ThrowRuntimeException(env, "Expected only 1 input tensor");
+    return nullptr;
+  }
+
+  TfLiteTensor *input = TfLiteInterpreterGetInputTensor(interpreter, 0);
+
+  std::printf("INFO: Input tensor:\n");
+  print_tensor_info(input);
+
+  int in_w, in_h, in_c;
+
+  if (!tensor_image_dims(input, &in_w, &in_h, &in_c)) {
+    std::cerr << "ERROR: failed to extract image dimensions of input tensor."
+              << std::endl;
+    ThrowRuntimeException(env,
+                          "Failed to extract image dimensions of input tensor");
+    return nullptr;
+  }
+
+  std::printf("INFO: input tensor image dimensions: %dx%d, with %d channels\n",
+              in_w, in_h, in_c);
+
+  // Output:
+
+  unsigned int n_tensors_out =
+      TfLiteInterpreterGetOutputTensorCount(interpreter);
+
+  if (n_tensors_out != 3) {
+    std::cerr << "ERROR: expected 3 output tensors, got " << n_tensors_out
+              << std::endl;
+    ThrowRuntimeException(env, "Expected 3 output tensors");
+    return nullptr;
+  }
+
+  const TfLiteTensor *output = TfLiteInterpreterGetOutputTensor(interpreter, 0);
+
+  std::printf("INFO: Output tensor:\n");
+  print_tensor_info(output);
+
+  int out_w, out_h, out_c;
+
+  if (!tensor_image_dims(output, &out_w, &out_h, &out_c)) {
+    std::cerr << "ERROR: failed to extract image dimensions of output tensor."
+              << std::endl;
+    ThrowRuntimeException(
+        env, "Failed to extract image dimensions of output tensor");
+    return nullptr;
+  }
+
+  std::printf("INFO: output tensor image dimensions: %dx%d, with %d channels\n",
+              out_w, out_h, out_c);
+
+  /* Load the input. */
+
   cv::Mat *input_img = reinterpret_cast<cv::Mat *>(input_cvmat_ptr);
   if (!input_img || input_img->empty()) {
     std::cerr << "ERROR: Invalid input image" << std::endl;
@@ -314,90 +462,23 @@ Java_org_photonvision_rubik_RubikJNI_detect
     return nullptr;
   }
 
-  // Get input tensor
-
-  int inputTensorIndex = TfLiteInterpreterGetInputTensorIndex(interpreter, 0);
-
-  if (inputTensorIndex < 0) {
-    std::cerr << "ERROR: Failed to get input tensor index" << std::endl;
-    ThrowRuntimeException(env, "Failed to get input tensor index");
-    return nullptr;
-  }
-
-  TfLiteTensor *inputTensor =
-      TfLiteInterpreterGetInputTensor(interpreter, inputTensorIndex);
-  if (!inputTensor) {
-    std::cerr << "ERROR: Failed to get input tensor" << std::endl;
-    ThrowRuntimeException(env, "Failed to get input tensor");
-    return nullptr;
-  }
-
-  // Check input tensor type
-  if (TfLiteTensorType(inputTensor) != kTfLiteUInt8) {
-    std::cerr << "ERROR: Input tensor is not of type kTfLiteUInt8" << std::endl;
-    ThrowRuntimeException(env, "Input tensor is not of type kTfLiteUInt8");
-    return nullptr;
-  }
-
-  // Get input tensor dimensions
-  int inputDims = TfLiteTensorNumDims(inputTensor);
-  if (inputDims < 3) {
-    std::cerr << "ERROR: Input tensor does not have enough dimensions"
-              << std::endl;
-    ThrowRuntimeException(env, "Input tensor does not have enough dimensions");
-    return nullptr;
-  }
-
-  int inputHeight = TfLiteTensorDim(inputTensor, 1);
-  int inputWidth = TfLiteTensorDim(inputTensor, 2);
-  int inputChannels = TfLiteTensorDim(inputTensor, 3);
-
-  // Check if input image matches expected dimensions
-  if (input_img->rows != inputHeight || input_img->cols != inputWidth ||
-      input_img->channels() != inputChannels) {
-    std::cerr << "ERROR: Input image dimensions do not match expected input "
-                 "tensor dimensions"
-              << std::endl;
+  if (in_w != input_img->cols || in_h != input_img->rows) {
+    std::cerr << "ERROR: input image dimensions (" << input_img->cols << "x"
+              << input_img->rows << ") do not match input tensor dimensions ("
+              << in_w << "x" << in_h << ")." << std::endl;
     ThrowRuntimeException(
-        env,
-        "Input image dimensions do not match expected input tensor dimensions");
+        env, "Input image dimensions do not match input tensor dimensions");
     return nullptr;
   }
 
-  // Copy image data to input tensor
-  uint8_t *inputData = static_cast<uint8_t *>(TfLiteTensorData(inputTensor));
-  if (!inputData) {
-    std::cerr << "ERROR: Failed to get input tensor data pointer" << std::endl;
-    ThrowRuntimeException(env, "Failed to get input tensor data pointer");
-    return nullptr;
-  }
+  // If the dimension and channels match, the byte size of the input and the
+  // tensor should be identical.
+  size_t image_size = input_img->cols * input_img->rows * in_c;
+  size_t tensor_size = TfLiteTensorByteSize(input);
+  assert(tensor_size == image_size);
 
-  // Ensure input image is in the correct format (e.g., BGR to RGB if needed)
-
-  cv::Mat rgbImage;
-  if (inputChannels == 3) {
-    // Convert BGR to RGB if necessary
-    cv::cvtColor(*input_img, rgbImage, cv::COLOR_BGR2RGB);
-  } else {
-    // Assume input image is already in the correct format
-    rgbImage = *input_img;
-  }
-
-  // TODO: Commenting out resizing for the time being, as it should be
-  // letterboxed. Leaving it in place as it might prove valuable in the future.
-  // Resize image to match input tensor dimensions
-  // cv::Mat resizedImage;
-  // cv::resize(rgbImage, resizedImage, cv::Size(inputWidth, inputHeight));
-  // Copy resized image data to input tensor
-  if (rgbImage.isContinuous()) {
-    std::memcpy(inputData, rgbImage.data,
-                rgbImage.total() * rgbImage.elemSize());
-  } else {
-    for (int i = 0; i < rgbImage.rows; ++i) {
-      std::memcpy(inputData + i * rgbImage.step[0], rgbImage.ptr(i),
-                  rgbImage.cols * rgbImage.elemSize());
-    }
-  }
+  // Write the input data into the tensor.
+  std::memcpy(TfLiteTensorData(input), input_img->data, tensor_size);
 
   // Run inference
   if (TfLiteInterpreterInvoke(interpreter) != kTfLiteOk) {
@@ -406,153 +487,269 @@ Java_org_photonvision_rubik_RubikJNI_detect
     return nullptr;
   }
 
-  // Get output tensor
-
-  int outputTensorIndex = TfLiteInterpreterGetOutputTensorIndex(interpreter, 0);
-  if (outputTensorIndex < 0) {
-    std::cerr << "ERROR: Failed to get output tensor index" << std::endl;
-    ThrowRuntimeException(env, "Failed to get output tensor index");
-    return nullptr;
-  }
-
   const TfLiteTensor *outputTensor =
-      TfLiteInterpreterGetOutputTensor(interpreter, outputTensorIndex);
+      TfLiteInterpreterGetOutputTensor(interpreter, 0);
   if (!outputTensor) {
     std::cerr << "ERROR: Failed to get output tensor" << std::endl;
     ThrowRuntimeException(env, "Failed to get output tensor");
     return nullptr;
   }
 
-  // Check output tensor type
-  if (TfLiteTensorType(outputTensor) != kTfLiteUInt8) {
-    std::cerr << "ERROR: Output tensor is not of type kTfLiteUInt8"
-              << std::endl;
-    ThrowRuntimeException(env, "Output tensor is not of type kTfLiteUInt8");
+  std::printf("INFO: Output tensor:\n");
+  print_tensor_info(outputTensor);
+
+  // Get tensor dimensions and validate structure
+  int batchSize = TfLiteTensorDim(outputTensor, 0);     // Should be 1
+  int numDetections = TfLiteTensorDim(outputTensor, 1); // Should be 8400
+  int boxCoords = TfLiteTensorDim(outputTensor, 2);     // Should be 4
+
+  std::printf("INFO: Tensor dimensions: batch=%d, detections=%d, coords=%d\n",
+              batchSize, numDetections, boxCoords);
+
+  if (batchSize != 1 || boxCoords != 4) {
+    std::cerr << "ERROR: Unexpected tensor dimensions" << std::endl;
+    ThrowRuntimeException(env, "Unexpected tensor dimensions");
     return nullptr;
   }
 
-  // Get output tensor dimensions
-  int outputDims = TfLiteTensorNumDims(outputTensor);
-  if (outputDims < 2) {
-    std::cerr << "ERROR: Output tensor does not have enough dimensions"
-              << std::endl;
-    ThrowRuntimeException(env, "Output tensor does not have enough dimensions");
+  // Get the other output tensors
+  const TfLiteTensor *scoresTensor =
+      TfLiteInterpreterGetOutputTensor(interpreter, 1);
+  const TfLiteTensor *classesTensor =
+      TfLiteInterpreterGetOutputTensor(interpreter, 2);
+
+  if (!scoresTensor || !classesTensor) {
+    std::cerr << "ERROR: Failed to get scores or classes tensor" << std::endl;
+    ThrowRuntimeException(env, "Failed to get scores or classes tensor");
     return nullptr;
   }
 
-  int outputHeight = TfLiteTensorDim(outputTensor, 1);
-  int outputWidth = TfLiteTensorDim(outputTensor, 2);
-  int outputChannels = TfLiteTensorDim(outputTensor, 3);
-  if (outputHeight <= 0 || outputWidth <= 0 || outputChannels <= 0) {
-    std::cerr << "ERROR: Invalid output tensor dimensions" << std::endl;
-    ThrowRuntimeException(env, "Invalid output tensor dimensions");
-    return nullptr;
-  }
-
-  // Get output tensor data
-  float *outputData = static_cast<float *>(TfLiteTensorData(outputTensor));
-  if (!outputData) {
-    std::cerr << "ERROR: Failed to get output tensor data pointer" << std::endl;
-    ThrowRuntimeException(env, "Failed to get output tensor data pointer");
-    return nullptr;
-  }
+  // Get tensor data - handle both float32 and quantized types
+  bool isQuantized = (TfLiteTensorType(outputTensor) == kTfLiteUInt8);
+  std::printf("INFO: Model is %s\n", isQuantized ? "quantized" : "float32");
 
   std::vector<detect_result_t> results;
+  std::vector<detect_result_t> candidateResults; // For NMS
 
-  int numClasses = outputHeight - 4; // Total features minus 4 box coordinates
-  int numAnchors = outputWidth;      // Number of anchor points
+  // Scale factors for coordinate conversion
+  float scaleX = static_cast<float>(input_img->cols);
+  float scaleY = static_cast<float>(input_img->rows);
 
-  // Scale factors to convert from input tensor size back to original image
-  // dimensions
-  float scaleX =
-      static_cast<float>(input_img->cols) / static_cast<float>(inputWidth);
-  float scaleY =
-      static_cast<float>(input_img->rows) / static_cast<float>(inputHeight);
+  // Determine number of classes from scores tensor
+  int numClasses = TfLiteTensorDim(scoresTensor, 1);
+  if (TfLiteTensorNumDims(scoresTensor) == 3) {
+    numClasses = TfLiteTensorDim(scoresTensor, 2);
+  }
+  std::printf("INFO: Number of classes: %d\n", numClasses);
 
-  for (int anchor = 0; anchor < numAnchors; anchor++) {
-    // Extract box coordinates (x_center, y_center, width, height)
-    float x_center = outputData[anchor + 0 * numAnchors];
-    float y_center = outputData[anchor + 1 * numAnchors];
-    float width = outputData[anchor + 2 * numAnchors];
-    float height = outputData[anchor + 3 * numAnchors];
+  // Process detections based on tensor type
+  if (isQuantized) {
+    // Handle quantized tensors
+    uint8_t *boxesData = static_cast<uint8_t *>(TfLiteTensorData(outputTensor));
+    uint8_t *scoresData =
+        static_cast<uint8_t *>(TfLiteTensorData(scoresTensor));
+    uint8_t *classesData =
+        static_cast<uint8_t *>(TfLiteTensorData(classesTensor));
 
-    // Find the class with highest confidence
-    float maxConfidence = 0.0f;
-    int bestClass = -1;
+    // Get quantization parameters
+    TfLiteQuantizationParams boxesParams =
+        TfLiteTensorQuantizationParams(outputTensor);
+    TfLiteQuantizationParams scoresParams =
+        TfLiteTensorQuantizationParams(scoresTensor);
+    TfLiteQuantizationParams classesParams =
+        TfLiteTensorQuantizationParams(classesTensor);
 
-    for (int cls = 0; cls < numClasses; cls++) {
-      float confidence = outputData[anchor + (4 + cls) * numAnchors];
-      if (confidence > maxConfidence) {
-        maxConfidence = confidence;
-        bestClass = cls;
+    std::printf("INFO: Quantization - Boxes: scale=%f, zero=%d | Scores: "
+                "scale=%f, zero=%d\n",
+                boxesParams.scale, boxesParams.zero_point, scoresParams.scale,
+                scoresParams.zero_point);
+
+    for (int i = 0; i < numDetections; i++) {
+      // Dequantize bounding boxes (assuming normalized YOLO format: x_center,
+      // y_center, width, height)
+      float x_center =
+          (boxesData[i * 4 + 0] - boxesParams.zero_point) * boxesParams.scale;
+      float y_center =
+          (boxesData[i * 4 + 1] - boxesParams.zero_point) * boxesParams.scale;
+      float width =
+          (boxesData[i * 4 + 2] - boxesParams.zero_point) * boxesParams.scale;
+      float height =
+          (boxesData[i * 4 + 3] - boxesParams.zero_point) * boxesParams.scale;
+
+      // Convert from center-width-height to corner coordinates
+      float x1 = x_center - width / 2.0f;
+      float y1 = y_center - height / 2.0f;
+      float x2 = x_center + width / 2.0f;
+      float y2 = y_center + height / 2.0f;
+
+      // Find best class and score
+      float maxScore = 0.0f;
+      int bestClass = -1;
+
+      if (numClasses == 1) {
+        // Binary classification
+        maxScore =
+            (scoresData[i] - scoresParams.zero_point) * scoresParams.scale;
+        bestClass = 0;
+      } else {
+        // Multi-class: find maximum score across all classes
+        for (int c = 0; c < numClasses; c++) {
+          int scoreIndex = i * numClasses + c;
+          float score = (scoresData[scoreIndex] - scoresParams.zero_point) *
+                        scoresParams.scale;
+          if (score > maxScore) {
+            maxScore = score;
+            bestClass = c;
+          }
+        }
+      }
+
+      // Apply confidence threshold
+      if (maxScore < boxThresh) {
+        continue;
+      }
+
+      // Convert normalized coordinates to pixel coordinates
+      int left = static_cast<int>(x1 * scaleX);
+      int top = static_cast<int>(y1 * scaleY);
+      int right = static_cast<int>(x2 * scaleX);
+      int bottom = static_cast<int>(y2 * scaleY);
+
+      // Clamp to image boundaries
+      left = std::max(0, std::min(left, input_img->cols - 1));
+      top = std::max(0, std::min(top, input_img->rows - 1));
+      right = std::max(left + 1, std::min(right, input_img->cols));
+      bottom = std::max(top + 1, std::min(bottom, input_img->rows));
+
+      // Create detection result
+      detect_result_t detection;
+      detection.box.left = left;
+      detection.box.top = top;
+      detection.box.right = right;
+      detection.box.bottom = bottom;
+      detection.obj_conf = maxScore;
+      detection.id = bestClass;
+
+      candidateResults.push_back(detection);
+    }
+  } else {
+    // Handle float32 tensors
+    float *boxesData = static_cast<float *>(TfLiteTensorData(outputTensor));
+    float *scoresData = static_cast<float *>(TfLiteTensorData(scoresTensor));
+    float *classesData = static_cast<float *>(TfLiteTensorData(classesTensor));
+
+    for (int i = 0; i < numDetections; i++) {
+      // Extract bounding boxes (assuming YOLO format)
+      float x_center = boxesData[i * 4 + 0];
+      float y_center = boxesData[i * 4 + 1];
+      float width = boxesData[i * 4 + 2];
+      float height = boxesData[i * 4 + 3];
+
+      // Convert to corner coordinates
+      float x1 = x_center - width / 2.0f;
+      float y1 = y_center - height / 2.0f;
+      float x2 = x_center + width / 2.0f;
+      float y2 = y_center + height / 2.0f;
+
+      // Find best class and score
+      float maxScore = 0.0f;
+      int bestClass = -1;
+
+      if (numClasses == 1) {
+        maxScore = scoresData[i];
+        bestClass = 0;
+      } else {
+        for (int c = 0; c < numClasses; c++) {
+          int scoreIndex = i * numClasses + c;
+          float score = scoresData[scoreIndex];
+          if (score > maxScore) {
+            maxScore = score;
+            bestClass = c;
+          }
+        }
+      }
+
+      if (maxScore < boxThresh) {
+        continue;
+      }
+
+      // Convert to pixel coordinates
+      int left = static_cast<int>(x1 * scaleX);
+      int top = static_cast<int>(y1 * scaleY);
+      int right = static_cast<int>(x2 * scaleX);
+      int bottom = static_cast<int>(y2 * scaleY);
+
+      // Clamp to image boundaries
+      left = std::max(0, std::min(left, input_img->cols - 1));
+      top = std::max(0, std::min(top, input_img->rows - 1));
+      right = std::max(left + 1, std::min(right, input_img->cols));
+      bottom = std::max(top + 1, std::min(bottom, input_img->rows));
+
+      detect_result_t detection;
+      detection.box.left = left;
+      detection.box.top = top;
+      detection.box.right = right;
+      detection.box.bottom = bottom;
+      detection.obj_conf = maxScore;
+      detection.id = bestClass;
+
+      candidateResults.push_back(detection);
+    }
+  }
+
+  // Apply Non-Maximum Suppression (NMS)
+  std::sort(candidateResults.begin(), candidateResults.end(),
+            [](const detect_result_t &a, const detect_result_t &b) {
+              return a.obj_conf > b.obj_conf;
+            });
+
+  const float nmsThreshold = 0.4f; // IoU threshold for NMS
+
+  for (size_t i = 0; i < candidateResults.size(); i++) {
+    if (candidateResults[i].obj_conf == 0.0f)
+      continue; // Already suppressed
+
+    results.push_back(candidateResults[i]);
+
+    // Suppress overlapping detections
+    for (size_t j = i + 1; j < candidateResults.size(); j++) {
+      if (candidateResults[j].obj_conf == 0.0f)
+        continue;
+      if (candidateResults[i].id != candidateResults[j].id)
+        continue; // Different classes
+
+      // Calculate IoU
+      int x1 =
+          std::max(candidateResults[i].box.left, candidateResults[j].box.left);
+      int y1 =
+          std::max(candidateResults[i].box.top, candidateResults[j].box.top);
+      int x2 = std::min(candidateResults[i].box.right,
+                        candidateResults[j].box.right);
+      int y2 = std::min(candidateResults[i].box.bottom,
+                        candidateResults[j].box.bottom);
+
+      if (x2 <= x1 || y2 <= y1)
+        continue; // No overlap
+
+      int intersectionArea = (x2 - x1) * (y2 - y1);
+      int area1 =
+          (candidateResults[i].box.right - candidateResults[i].box.left) *
+          (candidateResults[i].box.bottom - candidateResults[i].box.top);
+      int area2 =
+          (candidateResults[j].box.right - candidateResults[j].box.left) *
+          (candidateResults[j].box.bottom - candidateResults[j].box.top);
+      int unionArea = area1 + area2 - intersectionArea;
+
+      float iou =
+          static_cast<float>(intersectionArea) / static_cast<float>(unionArea);
+
+      if (iou > nmsThreshold) {
+        candidateResults[j].obj_conf = 0.0f; // Suppress this detection
       }
     }
-
-    // Skip if no class has confidence above threshold
-    if (maxConfidence < boxThresh) {
-      continue;
-    }
-
-    // Convert center coordinates and dimensions to corner coordinates
-    float x1 = x_center - width / 2.0f;
-    float y1 = y_center - height / 2.0f;
-    float x2 = x_center + width / 2.0f;
-    float y2 = y_center + height / 2.0f;
-
-    // Convert to detect_result_t format
-    detect_result_t detection;
-
-    // Scale coordinates back to original image size
-    detection.box.left = static_cast<int>(x1 * scaleX);
-    detection.box.top = static_cast<int>(y1 * scaleY);
-    detection.box.right = static_cast<int>(x2 * scaleX);
-    detection.box.bottom = static_cast<int>(y2 * scaleY);
-
-    // Clamp coordinates to image boundaries
-    detection.box.left =
-        std::max(0, std::min(detection.box.left, input_img->cols - 1));
-    detection.box.top =
-        std::max(0, std::min(detection.box.top, input_img->rows - 1));
-    detection.box.right =
-        std::max(0, std::min(detection.box.right, input_img->cols - 1));
-    detection.box.bottom =
-        std::max(0, std::min(detection.box.bottom, input_img->rows - 1));
-
-    // Ensure valid bounding box
-    if (detection.box.right <= detection.box.left ||
-        detection.box.bottom <= detection.box.top) {
-      continue;
-    }
-
-    detection.obj_conf = maxConfidence;
-    detection.id = bestClass;
-
-    results.push_back(detection);
   }
 
-  // Convert results to Java object array
-  jobjectArray resultArray =
-      env->NewObjectArray(results.size(), detectionResultClass, nullptr);
-  if (!resultArray) {
-    std::cerr << "ERROR: Failed to create result array" << std::endl;
-    ThrowRuntimeException(env, "Failed to create result array");
-    return nullptr;
-  }
-
-  for (size_t i = 0; i < results.size(); i++) {
-    jobject jResult = MakeJObject(env, results[i]);
-    if (!jResult) {
-      std::cerr << "ERROR: Failed to create Java object for result " << i
-                << std::endl;
-      ThrowRuntimeException(
-          env, "Failed to create Java object for detection result");
-      continue;
-    }
-    env->SetObjectArrayElement(resultArray, i, jResult);
-    env->DeleteLocalRef(jResult);
-  }
-
-  std::printf("INFO: Detection completed, found %zu results\n", results.size());
-  return resultArray;
+  std::printf("INFO: After NMS: %zu detections from %zu candidates\n",
+              results.size(), candidateResults.size());
 }
 } // extern "C"
