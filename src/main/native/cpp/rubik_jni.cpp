@@ -524,10 +524,6 @@ Java_org_photonvision_rubik_RubikJNI_detect
     return nullptr;
   }
 
-  // Get tensor data - handle both float32 and quantized types
-  bool isQuantized = (TfLiteTensorType(outputTensor) == kTfLiteUInt8);
-  std::printf("INFO: Model is %s\n", isQuantized ? "quantized" : "float32");
-
   std::vector<detect_result_t> results;
   std::vector<detect_result_t> candidateResults; // For NMS
 
@@ -542,159 +538,91 @@ Java_org_photonvision_rubik_RubikJNI_detect
   }
   std::printf("INFO: Number of classes: %d\n", numClasses);
 
-  // Process detections based on tensor type
-  if (isQuantized) {
-    // Handle quantized tensors
-    uint8_t *boxesData = static_cast<uint8_t *>(TfLiteTensorData(outputTensor));
-    uint8_t *scoresData =
-        static_cast<uint8_t *>(TfLiteTensorData(scoresTensor));
-    uint8_t *classesData =
-        static_cast<uint8_t *>(TfLiteTensorData(classesTensor));
+  // Handle quantized tensors
+  uint8_t *boxesData = static_cast<uint8_t *>(TfLiteTensorData(outputTensor));
+  uint8_t *scoresData = static_cast<uint8_t *>(TfLiteTensorData(scoresTensor));
+  uint8_t *classesData =
+      static_cast<uint8_t *>(TfLiteTensorData(classesTensor));
 
-    // Get quantization parameters
-    TfLiteQuantizationParams boxesParams =
-        TfLiteTensorQuantizationParams(outputTensor);
-    TfLiteQuantizationParams scoresParams =
-        TfLiteTensorQuantizationParams(scoresTensor);
-    TfLiteQuantizationParams classesParams =
-        TfLiteTensorQuantizationParams(classesTensor);
+  // Get quantization parameters
+  TfLiteQuantizationParams boxesParams =
+      TfLiteTensorQuantizationParams(outputTensor);
+  TfLiteQuantizationParams scoresParams =
+      TfLiteTensorQuantizationParams(scoresTensor);
+  TfLiteQuantizationParams classesParams =
+      TfLiteTensorQuantizationParams(classesTensor);
 
-    std::printf("INFO: Quantization - Boxes: scale=%f, zero=%d | Scores: "
-                "scale=%f, zero=%d\n",
-                boxesParams.scale, boxesParams.zero_point, scoresParams.scale,
-                scoresParams.zero_point);
+  std::printf("INFO: Quantization - Boxes: scale=%f, zero=%d | Scores: "
+              "scale=%f, zero=%d\n",
+              boxesParams.scale, boxesParams.zero_point, scoresParams.scale,
+              scoresParams.zero_point);
 
-    for (int i = 0; i < numDetections; i++) {
-      // Dequantize bounding boxes (assuming normalized YOLO format: x_center,
-      // y_center, width, height)
-      float x_center =
-          (boxesData[i * 4 + 0] - boxesParams.zero_point) * boxesParams.scale;
-      float y_center =
-          (boxesData[i * 4 + 1] - boxesParams.zero_point) * boxesParams.scale;
-      float width =
-          (boxesData[i * 4 + 2] - boxesParams.zero_point) * boxesParams.scale;
-      float height =
-          (boxesData[i * 4 + 3] - boxesParams.zero_point) * boxesParams.scale;
+  for (int i = 0; i < numDetections; i++) {
+    // Dequantize bounding boxes (assuming normalized YOLO format: x_center,
+    // y_center, width, height)
+    float x_center =
+        (boxesData[i * 4 + 0] - boxesParams.zero_point) * boxesParams.scale;
+    float y_center =
+        (boxesData[i * 4 + 1] - boxesParams.zero_point) * boxesParams.scale;
+    float width =
+        (boxesData[i * 4 + 2] - boxesParams.zero_point) * boxesParams.scale;
+    float height =
+        (boxesData[i * 4 + 3] - boxesParams.zero_point) * boxesParams.scale;
 
-      // Convert from center-width-height to corner coordinates
-      float x1 = x_center - width / 2.0f;
-      float y1 = y_center - height / 2.0f;
-      float x2 = x_center + width / 2.0f;
-      float y2 = y_center + height / 2.0f;
+    // Convert from center-width-height to corner coordinates
+    float x1 = x_center - width / 2.0f;
+    float y1 = y_center - height / 2.0f;
+    float x2 = x_center + width / 2.0f;
+    float y2 = y_center + height / 2.0f;
 
-      // Find best class and score
-      float maxScore = 0.0f;
-      int bestClass = -1;
+    // Find best class and score
+    float maxScore = 0.0f;
+    int bestClass = -1;
 
-      if (numClasses == 1) {
-        // Binary classification
-        maxScore =
-            (scoresData[i] - scoresParams.zero_point) * scoresParams.scale;
-        bestClass = 0;
-      } else {
-        // Multi-class: find maximum score across all classes
-        for (int c = 0; c < numClasses; c++) {
-          int scoreIndex = i * numClasses + c;
-          float score = (scoresData[scoreIndex] - scoresParams.zero_point) *
-                        scoresParams.scale;
-          if (score > maxScore) {
-            maxScore = score;
-            bestClass = c;
-          }
+    if (numClasses == 1) {
+      // Binary classification
+      maxScore = (scoresData[i] - scoresParams.zero_point) * scoresParams.scale;
+      bestClass = 0;
+    } else {
+      // Multi-class: find maximum score across all classes
+      for (int c = 0; c < numClasses; c++) {
+        int scoreIndex = i * numClasses + c;
+        float score = (scoresData[scoreIndex] - scoresParams.zero_point) *
+                      scoresParams.scale;
+        if (score > maxScore) {
+          maxScore = score;
+          bestClass = c;
         }
       }
-
-      // Apply confidence threshold
-      if (maxScore < boxThresh) {
-        continue;
-      }
-
-      // Convert normalized coordinates to pixel coordinates
-      int left = static_cast<int>(x1 * scaleX);
-      int top = static_cast<int>(y1 * scaleY);
-      int right = static_cast<int>(x2 * scaleX);
-      int bottom = static_cast<int>(y2 * scaleY);
-
-      // Clamp to image boundaries
-      left = std::max(0, std::min(left, input_img->cols - 1));
-      top = std::max(0, std::min(top, input_img->rows - 1));
-      right = std::max(left + 1, std::min(right, input_img->cols));
-      bottom = std::max(top + 1, std::min(bottom, input_img->rows));
-
-      // Create detection result
-      detect_result_t detection;
-      detection.box.left = left;
-      detection.box.top = top;
-      detection.box.right = right;
-      detection.box.bottom = bottom;
-      detection.obj_conf = maxScore;
-      detection.id = bestClass;
-
-      candidateResults.push_back(detection);
     }
-  } else {
-    // Handle float32 tensors
-    float *boxesData = static_cast<float *>(TfLiteTensorData(outputTensor));
-    float *scoresData = static_cast<float *>(TfLiteTensorData(scoresTensor));
-    float *classesData = static_cast<float *>(TfLiteTensorData(classesTensor));
 
-    for (int i = 0; i < numDetections; i++) {
-      // Extract bounding boxes (assuming YOLO format)
-      float x_center = boxesData[i * 4 + 0];
-      float y_center = boxesData[i * 4 + 1];
-      float width = boxesData[i * 4 + 2];
-      float height = boxesData[i * 4 + 3];
-
-      // Convert to corner coordinates
-      float x1 = x_center - width / 2.0f;
-      float y1 = y_center - height / 2.0f;
-      float x2 = x_center + width / 2.0f;
-      float y2 = y_center + height / 2.0f;
-
-      // Find best class and score
-      float maxScore = 0.0f;
-      int bestClass = -1;
-
-      if (numClasses == 1) {
-        maxScore = scoresData[i];
-        bestClass = 0;
-      } else {
-        for (int c = 0; c < numClasses; c++) {
-          int scoreIndex = i * numClasses + c;
-          float score = scoresData[scoreIndex];
-          if (score > maxScore) {
-            maxScore = score;
-            bestClass = c;
-          }
-        }
-      }
-
-      if (maxScore < boxThresh) {
-        continue;
-      }
-
-      // Convert to pixel coordinates
-      int left = static_cast<int>(x1 * scaleX);
-      int top = static_cast<int>(y1 * scaleY);
-      int right = static_cast<int>(x2 * scaleX);
-      int bottom = static_cast<int>(y2 * scaleY);
-
-      // Clamp to image boundaries
-      left = std::max(0, std::min(left, input_img->cols - 1));
-      top = std::max(0, std::min(top, input_img->rows - 1));
-      right = std::max(left + 1, std::min(right, input_img->cols));
-      bottom = std::max(top + 1, std::min(bottom, input_img->rows));
-
-      detect_result_t detection;
-      detection.box.left = left;
-      detection.box.top = top;
-      detection.box.right = right;
-      detection.box.bottom = bottom;
-      detection.obj_conf = maxScore;
-      detection.id = bestClass;
-
-      candidateResults.push_back(detection);
+    // Apply confidence threshold
+    if (maxScore < boxThresh) {
+      continue;
     }
+
+    // Convert normalized coordinates to pixel coordinates
+    int left = static_cast<int>(x1 * scaleX);
+    int top = static_cast<int>(y1 * scaleY);
+    int right = static_cast<int>(x2 * scaleX);
+    int bottom = static_cast<int>(y2 * scaleY);
+
+    // Clamp to image boundaries
+    left = std::max(0, std::min(left, input_img->cols - 1));
+    top = std::max(0, std::min(top, input_img->rows - 1));
+    right = std::max(left + 1, std::min(right, input_img->cols));
+    bottom = std::max(top + 1, std::min(bottom, input_img->rows));
+
+    // Create detection result
+    detect_result_t detection;
+    detection.box.left = left;
+    detection.box.top = top;
+    detection.box.right = right;
+    detection.box.bottom = bottom;
+    detection.obj_conf = maxScore;
+    detection.id = bestClass;
+
+    candidateResults.push_back(detection);
   }
 
   // Apply Non-Maximum Suppression (NMS)
