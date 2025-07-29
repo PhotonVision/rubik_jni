@@ -1,3 +1,20 @@
+/*
+ * Copyright (C) Photon Vision.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 /* Copyright 2020 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,8 +29,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
-#ifndef TENSORFLOW_LITE_C_C_API_H_
-#define TENSORFLOW_LITE_C_C_API_H_
+#ifndef RUBIK_JNI_SRC_MAIN_NATIVE_INCLUDE_TENSORFLOW_C_API_H_
+#define RUBIK_JNI_SRC_MAIN_NATIVE_INCLUDE_TENSORFLOW_C_API_H_
 
 /// \file
 ///
@@ -52,7 +69,7 @@ typedef TfLiteOperator TfLiteRegistrationExternal;
 #define TfLiteRegistrationExternalSetPrepare TfLiteOperatorSetPrepare
 #define TfLiteRegistrationExternalSetInvoke TfLiteOperatorSetInvoke
 #define TfLiteRegistrationExternalGetCustomName TfLiteOperatorGetCustomName
-#endif  // __cplusplus
-#endif  // DOYXGEN_SKIP
+#endif // __cplusplus
+#endif // DOYXGEN_SKIP
 
-#endif  // TENSORFLOW_LITE_C_C_API_H_
+#endif // RUBIK_JNI_SRC_MAIN_NATIVE_INCLUDE_TENSORFLOW_C_API_H_
