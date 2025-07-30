@@ -108,5 +108,5 @@ public class RubikJNI {
      * @return An array of {@link RubikJNI.RubikResult} objects containing the
      *         detection results.
      */
-    public static native RubikResult[] detect(long interpreterPtr, long imagePtr, double boxThresh);
+    public static native RubikResult[] detect(long interpreterPtr, long imagePtr, double boxThresh, double nmsThreshold);
 }
