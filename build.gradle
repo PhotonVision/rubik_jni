@@ -3,7 +3,7 @@ plugins {
     id 'edu.wpi.first.WpilibTools' version '1.3.0'
     id "edu.wpi.first.wpilib.repositories.WPILibRepositoriesPlugin" version "2020.2"
     id "com.diffplug.spotless" version "6.22.0"
-    id "edu.wpi.first.GradleRIO" version "2024.1.1"
+    id "edu.wpi.first.GradleRIO" version "2025.1.1"
 }
 
 allprojects {
@@ -23,9 +23,9 @@ ext {
     pubVersion = versionString
     isDev = pubVersion.startsWith("dev")
 
-    wpilibVersion = "2024.3.2"
+    wpilibVersion = "2025.3.2"
     wpimathVersion = wpilibVersion
-    openCVversion = "4.8.0-2"
+    openCVversion = "4.10.0-3"
 }
 
 wpi.getVersions().getOpencvVersion().convention(openCVversion);
