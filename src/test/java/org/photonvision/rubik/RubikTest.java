@@ -28,10 +28,13 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
+import org.opencv.core.Point;
+import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.dnn.Dnn;
 import org.opencv.dnn.Net;
 import org.opencv.imgcodecs.Imgcodecs;
+import org.opencv.imgproc.Imgproc;
 import org.photonvision.rubik.RubikJNI.RubikResult;
 
 import edu.wpi.first.cscore.CvSink;
@@ -79,5 +82,33 @@ public class RubikTest {
 
         System.out.println("Releasing Rubik detector");
         RubikJNI.destroy(ptrs);
+
+        for (RubikResult result : ret) {
+            System.out.println("Result: " + result);
+
+            // Draw bounding box on the image
+            Imgproc.rectangle(
+                img,
+                new Point(result.rect.x, result.rect.y),
+                new Point(result.rect.x + result.rect.width, result.rect.y + result.rect.height),
+                new Scalar(0, 255, 0), // Green color
+                2 // Thickness
+            );
+
+            // Put label text
+            Imgproc.putText(
+                img,
+                result.class_id + " " + String.format("%.2f", result.conf),
+                new Point(result.rect.x, result.rect.y - 10),
+                Imgproc.FONT_HERSHEY_SIMPLEX,
+                0.5, // Font scale
+                new Scalar(0, 255, 0), // Green color
+                1 // Thickness
+            );
+        }
+
+        // Save the image with results
+        Imgcodecs.imwrite("src/test/resources/bus_with_results.jpg", img);
+        System.out.println("Results written to image and saved as bus_with_results.jpg");
     }
 }
