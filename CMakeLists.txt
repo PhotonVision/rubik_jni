@@ -130,3 +130,10 @@ set_target_properties(${PROJECT_NAME} PROPERTIES INSTALL_RPATH "\\\$ORIGIN/")
 
 include(GNUInstallDirs)
 install(TARGETS ${PROJECT_NAME})
+install(
+    FILES
+        ${TFLITE_LIB_PATH}/libtensorflowlite_c.so
+        ${TFLITE_LIB_PATH}/libtensorflowlite.so
+        ${TFLITE_LIB_PATH}/libexternal_delegate.so
+    TYPE LIB
+)
