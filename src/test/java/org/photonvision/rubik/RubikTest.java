@@ -67,7 +67,7 @@ public class RubikTest {
         System.out.println("Image loaded: " + img.size() + " " + img.type());
 
         System.out.println("Creating Rubik detector");
-        long[] ptrs = RubikJNI.create("src/test/resources/basic.tflite");
+        long[] ptrs = RubikJNI.create("src/test/resources/yolov8nCOCO.tflite");
 
         for (long ptr : ptrs) {
             if (ptr == 0) {
@@ -76,7 +76,7 @@ public class RubikTest {
         }
 
         System.out.println("Rubik detector created: " + ptrs.toString());
-        RubikResult[] ret = RubikJNI.detect(ptrs[0], img.getNativeObjAddr(), 0.5f);
+        RubikResult[] ret = RubikJNI.detect(ptrs[0], img.getNativeObjAddr(), 0.5f, 0.4f);
 
         System.out.println("Detection results: " + Arrays.toString(ret));
 

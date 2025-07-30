@@ -349,7 +349,8 @@ Java_org_photonvision_rubik_RubikJNI_destroy
   }
 
   // Extract all pointers from the single array
-  TfLiteInterpreter *interpreter = reinterpret_cast<TfLiteInterpreter *>(elements[0]);
+  TfLiteInterpreter *interpreter =
+      reinterpret_cast<TfLiteInterpreter *>(elements[0]);
   TfLiteDelegate *delegate = reinterpret_cast<TfLiteDelegate *>(elements[1]);
   TfLiteModel *model = reinterpret_cast<TfLiteModel *>(elements[2]);
 
@@ -357,9 +358,12 @@ Java_org_photonvision_rubik_RubikJNI_destroy
   env->ReleaseLongArrayElements(ptrs, elements, 0);
 
   // Now safely use the pointers
-  if (interpreter) TfLiteInterpreterDelete(interpreter);
-  if (delegate) TfLiteExternalDelegateDelete(delegate);
-  if (model) TfLiteModelDelete(model);
+  if (interpreter)
+    TfLiteInterpreterDelete(interpreter);
+  if (delegate)
+    TfLiteExternalDelegateDelete(delegate);
+  if (model)
+    TfLiteModelDelete(model);
 
   std::printf("INFO: Object Detection instance destroyed successfully\n");
 }
@@ -367,12 +371,12 @@ Java_org_photonvision_rubik_RubikJNI_destroy
 /*
  * Class:     org_photonvision_rubik_RubikJNI
  * Method:    detect
- * Signature: (JJD)[Ljava/lang/Object;
+ * Signature: (JJDD)[Ljava/lang/Object;
  */
 JNIEXPORT jobjectArray JNICALL
 Java_org_photonvision_rubik_RubikJNI_detect
   (JNIEnv *env, jobject obj, jlong interpreterPtr, jlong input_cvmat_ptr,
-   jdouble boxThresh)
+   jdouble boxThresh, jdouble nmsThreshold)
 {
   TfLiteInterpreter *interpreter =
       reinterpret_cast<TfLiteInterpreter *>(interpreterPtr);
@@ -395,8 +399,10 @@ Java_org_photonvision_rubik_RubikJNI_detect
     return nullptr;
   }
 
-  std::memcpy(TfLiteTensorData(input), input_img->data,
-              TfLiteTensorByteSize(input));
+  cv::Mat rgb;
+  cv::cvtColor(*input_img, rgb, cv::COLOR_BGR2RGB);
+
+  std::memcpy(TfLiteTensorData(input), rgb.data, TfLiteTensorByteSize(input));
 
   if (TfLiteInterpreterInvoke(interpreter) != kTfLiteOk) {
     ThrowRuntimeException(env, "Interpreter invocation failed");
@@ -410,28 +416,63 @@ Java_org_photonvision_rubik_RubikJNI_detect
   const TfLiteTensor *classesTensor =
       TfLiteInterpreterGetOutputTensor(interpreter, 2);
 
-  const int numDetections = TfLiteTensorDim(boxesTensor, 1);
-  const auto boxesParams = TfLiteTensorQuantizationParams(boxesTensor);
-  const auto scoresParams = TfLiteTensorQuantizationParams(scoresTensor);
+  const TfLiteQuantizationParams boxesParams =
+      TfLiteTensorQuantizationParams(boxesTensor);
+  const TfLiteQuantizationParams scoresParams =
+      TfLiteTensorQuantizationParams(scoresTensor);
 
-  auto *boxesData = static_cast<uint8_t *>(TfLiteTensorData(boxesTensor));
-  auto *scoresData = static_cast<uint8_t *>(TfLiteTensorData(scoresTensor));
-  auto *classesData = static_cast<uint8_t *>(TfLiteTensorData(classesTensor));
+  const int numBoxes = TfLiteTensorDim(boxesTensor, 1);
+  std::printf("INFO: Detected %d boxes\n", numBoxes);
+
+  if (TfLiteTensorType(boxesTensor) != kTfLiteUInt8) {
+    ThrowRuntimeException(env, "Expected uint8 tensor type");
+    return nullptr;
+  }
+
+  if (TfLiteTensorType(scoresTensor) != kTfLiteUInt8) {
+    ThrowRuntimeException(env, "Expected uint8 tensor type");
+    return nullptr;
+  }
+
+  if (TfLiteTensorType(classesTensor) != kTfLiteUInt8) {
+    ThrowRuntimeException(env, "Expected uint8 tensor type");
+    return nullptr;
+  }
+
+  uint8_t *boxesData = static_cast<uint8_t *>(TfLiteTensorData(boxesTensor));
+  uint8_t *scoresData = static_cast<uint8_t *>(TfLiteTensorData(scoresTensor));
+  uint8_t *classesData =
+      static_cast<uint8_t *>(TfLiteTensorData(classesTensor));
+
+  std::printf("INFO: Boxes: [");
+  for (int i = 0; i < numBoxes * 4; ++i) {
+    std::printf("%d%s", boxesData[i], i == numBoxes * 4 - 1 ? "" : ", ");
+  }
+  std::printf("]\n");
+  std::printf("INFO: Scores tensor: %p\n", static_cast<void *>(scoresData));
+  std::printf("INFO: Classes tensor: %p\n", static_cast<void *>(classesData));
+
+  std::printf("boxesTensor dims: [");
+  for (int i = 0; i < TfLiteTensorNumDims(boxesTensor); ++i) {
+    std::printf("%d%s", TfLiteTensorDim(boxesTensor, i),
+                i == TfLiteTensorNumDims(boxesTensor) - 1 ? "]\n" : ", ");
+  }
+
+  std::printf("boxes scale: %f, zero_point: %d\n", boxesParams.scale,
+              boxesParams.zero_point);
 
   std::vector<detect_result_t> candidateResults;
 
-  float scaleX = static_cast<float>(input_img->cols);
-  float scaleY = static_cast<float>(input_img->rows);
+  // float scaleX = static_cast<float>(input_img->cols);
+  // float scaleY = static_cast<float>(input_img->rows);
 
-  for (int i = 0; i < numDetections; ++i) {
-    float x_center =
-        (boxesData[i * 4 + 0] - boxesParams.zero_point) * boxesParams.scale;
-    float y_center =
-        (boxesData[i * 4 + 1] - boxesParams.zero_point) * boxesParams.scale;
-    float width =
-        (boxesData[i * 4 + 2] - boxesParams.zero_point) * boxesParams.scale;
-    float height =
-        (boxesData[i * 4 + 3] - boxesParams.zero_point) * boxesParams.scale;
+  for (int i = 0; i < numBoxes; ++i) {
+    // DeQuantize
+float x_center = ((boxesData[i * 4 + 0] - boxesParams.zero_point) * boxesParams.scale);
+float y_center = ((boxesData[i * 4 + 1] - boxesParams.zero_point) * boxesParams.scale);
+float width    = ((boxesData[i * 4 + 2] - boxesParams.zero_point) * boxesParams.scale);
+float height   = ((boxesData[i * 4 + 3] - boxesParams.zero_point) * boxesParams.scale);
+
 
     float score =
         (scoresData[i] - scoresParams.zero_point) * scoresParams.scale;
@@ -445,24 +486,30 @@ Java_org_photonvision_rubik_RubikJNI_detect
     float x2 = x_center + width / 2.0f;
     float y2 = y_center + height / 2.0f;
 
-    int left = std::max(
-        0, std::min(static_cast<int>(x1 * scaleX), input_img->cols - 1));
-    int top = std::max(
-        0, std::min(static_cast<int>(y1 * scaleY), input_img->rows - 1));
-    int right = std::max(
-        left + 1, std::min(static_cast<int>(x2 * scaleX), input_img->cols));
-    int bottom = std::max(
-        top + 1, std::min(static_cast<int>(y2 * scaleY), input_img->rows));
+    x1 = std::max(0.0f, std::min(x1, static_cast<float>(input_img->cols - 1)));
+    y1 = std::max(0.0f, std::min(y1, static_cast<float>(input_img->rows - 1)));
+    x2 = std::max(0.0f, std::min(x2, static_cast<float>(input_img->cols - 1)));
+    y2 = std::max(0.0f, std::min(y2, static_cast<float>(input_img->rows - 1)));
 
+      std::printf("DEBUG Box %d: raw=[%d,%d,%d,%d], "
+                  "dequant=[%.3f,%.3f,%.3f,%.3f], score=%.3f\n",
+                  i, boxesData[i * 4], boxesData[i * 4 + 1],
+                  boxesData[i * 4 + 2], boxesData[i * 4 + 3], x_center,
+                  y_center, width, height, score);
+    
     detect_result_t det;
-    det.box.left = left;
-    det.box.top = top;
-    det.box.right = right;
-    det.box.bottom = bottom;
+    det.box.left = x1;
+    det.box.top = y1;
+    det.box.right = x2;
+    det.box.bottom = y2;
     det.obj_conf = score;
     det.id = classId;
 
     candidateResults.push_back(det);
+    // std::printf(
+    //     "INFO: Detected object %d: [%d, %d, %d, %d] with confidence %.2f\n",
+    //     classId, det.box.left, det.box.top, det.box.right, det.box.bottom,
+    //     det.obj_conf);
   }
 
   // NMS
@@ -471,7 +518,6 @@ Java_org_photonvision_rubik_RubikJNI_detect
               return a.obj_conf > b.obj_conf;
             });
 
-  const float nmsThreshold = 0.4f;
   std::vector<detect_result_t> results;
 
   for (size_t i = 0; i < candidateResults.size(); ++i) {
