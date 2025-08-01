@@ -368,6 +368,66 @@ Java_org_photonvision_rubik_RubikJNI_destroy
   std::printf("INFO: Object Detection instance destroyed successfully\n");
 }
 
+inline float calculateIoU(const BOX_RECT &box1, const BOX_RECT &box2) {
+  // Calculate intersection coordinates
+  const int x1 = std::max(box1.left, box2.left);
+  const int y1 = std::max(box1.top, box2.top);
+  const int x2 = std::min(box1.right, box2.right);
+  const int y2 = std::min(box1.bottom, box2.bottom);
+
+  // No intersection case
+  if (x2 <= x1 || y2 <= y1)
+    return 0.0f;
+
+  // Calculate areas using pre-computed values when possible
+  const int intersectionArea = (x2 - x1) * (y2 - y1);
+  const int area1 = (box1.right - box1.left) * (box1.bottom - box1.top);
+  const int area2 = (box2.right - box2.left) * (box2.bottom - box2.top);
+
+  return static_cast<float>(intersectionArea) /
+         (area1 + area2 - intersectionArea);
+}
+
+std::vector<detect_result_t>
+optimizedNMS(std::vector<detect_result_t> &candidates, float nmsThreshold) {
+  if (candidates.empty())
+    return {};
+
+  // Sort by confidence (descending) - single pass
+  std::sort(candidates.begin(), candidates.end(),
+            [](const detect_result_t &a, const detect_result_t &b) {
+              return a.obj_conf > b.obj_conf;
+            });
+
+  std::vector<detect_result_t> results;
+  results.reserve(candidates.size() / 4); // Reasonable initial capacity
+
+  // Use bitset for faster suppression tracking
+  std::vector<bool> suppressed(candidates.size(), false);
+
+  for (size_t i = 0; i < candidates.size(); ++i) {
+    if (suppressed[i])
+      continue;
+
+    // Keep this detection
+    results.push_back(candidates[i]);
+    const auto &currentBox = candidates[i];
+
+    // Suppress overlapping boxes of the SAME class only
+    // Start from i+1 since array is sorted by confidence
+    for (size_t j = i + 1; j < candidates.size(); ++j) {
+      if (suppressed[j] || candidates[j].id != currentBox.id)
+        continue;
+
+      if (calculateIoU(currentBox.box, candidates[j].box) > nmsThreshold) {
+        suppressed[j] = true;
+      }
+    }
+  }
+
+  return results;
+}
+
 /*
  * Class:     org_photonvision_rubik_RubikJNI
  * Method:    detect
@@ -444,23 +504,6 @@ Java_org_photonvision_rubik_RubikJNI_detect
   uint8_t *classesData =
       static_cast<uint8_t *>(TfLiteTensorData(classesTensor));
 
-  std::printf("INFO: Boxes: [");
-  for (int i = 0; i < numBoxes * 4; ++i) {
-    std::printf("%d%s", boxesData[i], i == numBoxes * 4 - 1 ? "" : ", ");
-  }
-  std::printf("]\n");
-  std::printf("INFO: Scores tensor: %p\n", static_cast<void *>(scoresData));
-  std::printf("INFO: Classes tensor: %p\n", static_cast<void *>(classesData));
-
-  std::printf("boxesTensor dims: [");
-  for (int i = 0; i < TfLiteTensorNumDims(boxesTensor); ++i) {
-    std::printf("%d%s", TfLiteTensorDim(boxesTensor, i),
-                i == TfLiteTensorNumDims(boxesTensor) - 1 ? "]\n" : ", ");
-  }
-
-  std::printf("boxes scale: %f, zero_point: %d\n", boxesParams.scale,
-              boxesParams.zero_point);
-
   std::vector<detect_result_t> candidateResults;
 
   // float scaleX = static_cast<float>(input_img->cols);
@@ -468,11 +511,14 @@ Java_org_photonvision_rubik_RubikJNI_detect
 
   for (int i = 0; i < numBoxes; ++i) {
     // DeQuantize
-float x_center = ((boxesData[i * 4 + 0] - boxesParams.zero_point) * boxesParams.scale);
-float y_center = ((boxesData[i * 4 + 1] - boxesParams.zero_point) * boxesParams.scale);
-float width    = ((boxesData[i * 4 + 2] - boxesParams.zero_point) * boxesParams.scale);
-float height   = ((boxesData[i * 4 + 3] - boxesParams.zero_point) * boxesParams.scale);
-
+    float x_center =
+        ((boxesData[i * 4 + 0] - boxesParams.zero_point) * boxesParams.scale);
+    float y_center =
+        ((boxesData[i * 4 + 1] - boxesParams.zero_point) * boxesParams.scale);
+    float width =
+        ((boxesData[i * 4 + 2] - boxesParams.zero_point) * boxesParams.scale);
+    float height =
+        ((boxesData[i * 4 + 3] - boxesParams.zero_point) * boxesParams.scale);
 
     float score =
         (scoresData[i] - scoresParams.zero_point) * scoresParams.scale;
@@ -491,12 +537,6 @@ float height   = ((boxesData[i * 4 + 3] - boxesParams.zero_point) * boxesParams.
     x2 = std::max(0.0f, std::min(x2, static_cast<float>(input_img->cols - 1)));
     y2 = std::max(0.0f, std::min(y2, static_cast<float>(input_img->rows - 1)));
 
-      std::printf("DEBUG Box %d: raw=[%d,%d,%d,%d], "
-                  "dequant=[%.3f,%.3f,%.3f,%.3f], score=%.3f\n",
-                  i, boxesData[i * 4], boxesData[i * 4 + 1],
-                  boxesData[i * 4 + 2], boxesData[i * 4 + 3], x_center,
-                  y_center, width, height, score);
-    
     detect_result_t det;
     det.box.left = x1;
     det.box.top = y1;
@@ -506,56 +546,11 @@ float height   = ((boxesData[i * 4 + 3] - boxesParams.zero_point) * boxesParams.
     det.id = classId;
 
     candidateResults.push_back(det);
-    // std::printf(
-    //     "INFO: Detected object %d: [%d, %d, %d, %d] with confidence %.2f\n",
-    //     classId, det.box.left, det.box.top, det.box.right, det.box.bottom,
-    //     det.obj_conf);
   }
 
   // NMS
-  std::sort(candidateResults.begin(), candidateResults.end(),
-            [](const detect_result_t &a, const detect_result_t &b) {
-              return a.obj_conf > b.obj_conf;
-            });
-
-  std::vector<detect_result_t> results;
-
-  for (size_t i = 0; i < candidateResults.size(); ++i) {
-    if (candidateResults[i].obj_conf == 0.0f)
-      continue;
-
-    results.push_back(candidateResults[i]);
-
-    for (size_t j = i + 1; j < candidateResults.size(); ++j) {
-      if (candidateResults[j].obj_conf == 0.0f ||
-          candidateResults[i].id != candidateResults[j].id)
-        continue;
-
-      int x1 =
-          std::max(candidateResults[i].box.left, candidateResults[j].box.left);
-      int y1 =
-          std::max(candidateResults[i].box.top, candidateResults[j].box.top);
-      int x2 = std::min(candidateResults[i].box.right,
-                        candidateResults[j].box.right);
-      int y2 = std::min(candidateResults[i].box.bottom,
-                        candidateResults[j].box.bottom);
-
-      if (x2 <= x1 || y2 <= y1)
-        continue;
-
-      int interArea = (x2 - x1) * (y2 - y1);
-      int area1 =
-          (candidateResults[i].box.right - candidateResults[i].box.left) *
-          (candidateResults[i].box.bottom - candidateResults[i].box.top);
-      int area2 =
-          (candidateResults[j].box.right - candidateResults[j].box.left) *
-          (candidateResults[j].box.bottom - candidateResults[j].box.top);
-      float iou = static_cast<float>(interArea) / (area1 + area2 - interArea);
-
-      if (iou > nmsThreshold)
-        candidateResults[j].obj_conf = 0.0f;
-    }
-  }
+  std::vector<detect_result_t> results =
+      optimizedNMS(candidateResults, static_cast<float>(nmsThreshold));
 
   jobjectArray jResults =
       env->NewObjectArray(results.size(), detectionResultClass, nullptr);
@@ -564,7 +559,6 @@ float height   = ((boxesData[i * 4 + 3] - boxesParams.zero_point) * boxesParams.
     env->SetObjectArrayElement(jResults, i, jDet);
   }
 
-  std::printf("INFO: Returned %zu results after NMS\n", results.size());
   return jResults;
 }
 
