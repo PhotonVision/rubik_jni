@@ -238,7 +238,7 @@ Java_org_photonvision_rubik_RubikJNI_create
   std::printf("INFO: Loaded model file '%s'\n", model_name);
 
   // Create external delegate options
-  auto delegateOptsValue =
+  TfLiteExternalDelegateOptions delegateOptsValue =
       TfLiteExternalDelegateOptionsDefault("libQnnTFLiteDelegate.so");
   TfLiteExternalDelegateOptions *delegateOpts = &delegateOptsValue;
   if (!delegateOpts) {
@@ -258,6 +258,8 @@ Java_org_photonvision_rubik_RubikJNI_create
     ThrowRuntimeException(env, "Failed to create external delegate");
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
+  } else {
+    std::printf("INFO: Created external delegate\n");
   }
 
   std::printf("INFO: Loaded external delegate\n");
@@ -296,6 +298,8 @@ Java_org_photonvision_rubik_RubikJNI_create
     TfLiteExternalDelegateDelete(delegate);
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
+  } else {
+    std::printf("INFO: Modified graph with external delegate\n");
   }
 
   // Allocate tensors
@@ -464,10 +468,22 @@ Java_org_photonvision_rubik_RubikJNI_detect
 
   std::memcpy(TfLiteTensorData(input), rgb.data, TfLiteTensorByteSize(input));
 
+  // Start timer for benchmark
+  struct timespec start, end;
+  clock_gettime(CLOCK_MONOTONIC, &start); // Start timing
+
   if (TfLiteInterpreterInvoke(interpreter) != kTfLiteOk) {
     ThrowRuntimeException(env, "Interpreter invocation failed");
     return nullptr;
   }
+
+  clock_gettime(CLOCK_MONOTONIC, &end); // End timing
+
+  // Calculate elapsed time in milliseconds
+  double elapsed_time = (end.tv_sec - start.tv_sec) * 1000.0 +
+                        (end.tv_nsec - start.tv_nsec) / 1000000.0;
+
+  std::printf("INFO: Model execution time: %.2f ms\n", elapsed_time);
 
   const TfLiteTensor *boxesTensor =
       TfLiteInterpreterGetOutputTensor(interpreter, 0);
