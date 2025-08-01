@@ -341,33 +341,25 @@ JNIEXPORT void JNICALL
 Java_org_photonvision_rubik_RubikJNI_destroy
   (JNIEnv *env, jclass, jlongArray ptrs)
 {
-  TfLiteInterpreter *interpreter = reinterpret_cast<TfLiteInterpreter *>(
-      env->GetLongArrayElements(ptrs, nullptr)[0]);
-  if (!interpreter) {
-    std::cerr << "ERROR: Invalid interpreter handle" << std::endl;
-    ThrowRuntimeException(env, "Invalid interpreter handle");
+  // Get the array elements ONCE
+  jlong *elements = env->GetLongArrayElements(ptrs, nullptr);
+  if (!elements) {
+    ThrowRuntimeException(env, "Failed to get array elements");
     return;
   }
 
-  TfLiteDelegate *delegate = reinterpret_cast<TfLiteDelegate *>(
-      env->GetLongArrayElements(ptrs, nullptr)[1]);
-  if (!delegate) {
-    std::cerr << "ERROR: Invalid delegate handle" << std::endl;
-    ThrowRuntimeException(env, "Invalid delegate handle");
-    return;
-  }
+  // Extract all pointers from the single array
+  TfLiteInterpreter *interpreter = reinterpret_cast<TfLiteInterpreter *>(elements[0]);
+  TfLiteDelegate *delegate = reinterpret_cast<TfLiteDelegate *>(elements[1]);
+  TfLiteModel *model = reinterpret_cast<TfLiteModel *>(elements[2]);
 
-  TfLiteModel *model = reinterpret_cast<TfLiteModel *>(
-      env->GetLongArrayElements(ptrs, nullptr)[2]);
-  if (!model) {
-    std::cerr << "ERROR: Invalid model handle" << std::endl;
-    ThrowRuntimeException(env, "Invalid model handle");
-    return;
-  }
+  // Release the array back to the JVM (CRITICAL!)
+  env->ReleaseLongArrayElements(ptrs, elements, 0);
 
-  TfLiteInterpreterDelete(interpreter);
-  TfLiteExternalDelegateDelete(delegate);
-  TfLiteModelDelete(model);
+  // Now safely use the pointers
+  if (interpreter) TfLiteInterpreterDelete(interpreter);
+  if (delegate) TfLiteExternalDelegateDelete(delegate);
+  if (model) TfLiteModelDelete(model);
 
   std::printf("INFO: Object Detection instance destroyed successfully\n");
 }
