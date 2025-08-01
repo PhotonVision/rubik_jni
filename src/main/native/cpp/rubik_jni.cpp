@@ -522,8 +522,9 @@ Java_org_photonvision_rubik_RubikJNI_detect
 
   std::vector<detect_result_t> candidateResults;
 
-  // float scaleX = static_cast<float>(input_img->cols);
-  // float scaleY = static_cast<float>(input_img->rows);
+  // Scale factors for converting normalized to pixel space
+  float scaleX = static_cast<float>(input_img->cols);
+  float scaleY = static_cast<float>(input_img->rows);
 
   for (int i = 0; i < numBoxes; ++i) {
     // DeQuantize
@@ -543,21 +544,35 @@ Java_org_photonvision_rubik_RubikJNI_detect
 
     int classId = classesData[i];
 
-    float x1 = x_center - width / 2.0f;
-    float y1 = y_center - height / 2.0f;
-    float x2 = x_center + width / 2.0f;
-    float y2 = y_center + height / 2.0f;
+    float pixel_x_center = x_center * scaleX;
+    float pixel_y_center = y_center * scaleY;
+    float pixel_width = width * scaleX;
+    float pixel_height = height * scaleY;
+
+    float x1 = pixel_x_center - (pixel_width / 2.0f);
+    float y1 = pixel_y_center - (pixel_height / 2.0f);
+    float x2 = pixel_x_center + (pixel_width / 2.0f);
+    float y2 = pixel_y_center + (pixel_height / 2.0f);
 
     x1 = std::max(0.0f, std::min(x1, static_cast<float>(input_img->cols - 1)));
     y1 = std::max(0.0f, std::min(y1, static_cast<float>(input_img->rows - 1)));
     x2 = std::max(0.0f, std::min(x2, static_cast<float>(input_img->cols - 1)));
     y2 = std::max(0.0f, std::min(y2, static_cast<float>(input_img->rows - 1)));
 
+    if(candidateResults.size() < 3) {
+      std::printf(" DEBUG: box %d - Normalized: center(%.2f, %.2f) size(%.2f, %.2f)\n", 
+                  i, x_center, y_center, width, height);
+      std::printf("DEBUG: box %d - Pixel: center(%.2f, %.2f) size(%.2f, %.2f)\n", 
+                  i, pixel_x_center, pixel_y_center, pixel_width, pixel_height);
+      std::printf("DEBUG: box %d - Final: (%.2f, %.2f) to (%.2f, %.2f), score=%.3f, class=%d\n", 
+                  i, x1, y1, x2, y2, score, classId);
+    }
+
     detect_result_t det;
-    det.box.left = x1;
-    det.box.top = y1;
-    det.box.right = x2;
-    det.box.bottom = y2;
+    det.box.left = static_cast<int>(x1);
+    det.box.top = static_cast<int>(y1);
+    det.box.right = static_cast<int>(x2);
+    det.box.bottom = static_cast<int>(y2);
     det.obj_conf = score;
     det.id = classId;
 
