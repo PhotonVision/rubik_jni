@@ -463,8 +463,39 @@ Java_org_photonvision_rubik_RubikJNI_detect
     return nullptr;
   }
 
+  int type = input_img->type();
+
+  std::printf("DEBUG: Original input image type: %d\n", type);
+  std::printf("DEBUG: Original input channels: %d\n", input_img->channels());
+
+  if (type == CV_8UC3) {
+    std::printf("DEBUG: Input image is in BGR format\n");
+  } else if (type == CV_8UC1) {
+    std::printf("DEBUG: Input image is in Grayscale format\n");
+  } else {
+    std::printf("DEBUG: Input image has an unexpected type: %d\n", type);
+  }
+
   cv::Mat rgb;
-  cv::cvtColor(*input_img, rgb, cv::COLOR_BGR2RGB);
+  if (input_img->channels() == 3) {
+    cv::cvtColor(*input_img, rgb, cv::COLOR_BGR2RGB);
+  } else if (input_img->channels() == 1) {
+    // Input is already grayscale, decide what to do
+    rgb = input_img->clone(); // or convert to 3-channel if needed
+  }
+
+  type = rgb.type();
+
+  std::printf("DEBUG: Output image type: %d\n", type);
+  std::printf("DEBUG: Output channels: %d\n", rgb.channels());
+
+  if (type == CV_8UC3) {
+    std::printf("DEBUG: Output image is in RGB format\n");
+  } else if (type == CV_8UC1) {
+    std::printf("DEBUG: Output image is in Grayscale format\n");
+  } else {
+    std::printf("DEBUG: Output image has an unexpected type: %d\n", type);
+  }
 
   std::memcpy(TfLiteTensorData(input), rgb.data, TfLiteTensorByteSize(input));
 
@@ -526,15 +557,19 @@ Java_org_photonvision_rubik_RubikJNI_detect
   float scaleX = static_cast<float>(input_img->cols);
   float scaleY = static_cast<float>(input_img->rows);
 
+std::printf("DEBUG: Image dimensions: %dx%d\n", input_img->cols, input_img->rows);
+std::printf("DEBUG: Quantization params - boxes: zp=%d, scale=%f\n", 
+           boxesParams.zero_point, boxesParams.scale);
+
   for (int i = 0; i < numBoxes; ++i) {
     // DeQuantize
-    float x_center =
+    float dequantized_x_center =
         ((boxesData[i * 4 + 0] - boxesParams.zero_point) * boxesParams.scale);
-    float y_center =
+    float dequantized_y_center =
         ((boxesData[i * 4 + 1] - boxesParams.zero_point) * boxesParams.scale);
-    float width =
+    float dequantized_width =
         ((boxesData[i * 4 + 2] - boxesParams.zero_point) * boxesParams.scale);
-    float height =
+    float dequantized_height =
         ((boxesData[i * 4 + 3] - boxesParams.zero_point) * boxesParams.scale);
 
     float score =
@@ -544,30 +579,47 @@ Java_org_photonvision_rubik_RubikJNI_detect
 
     int classId = classesData[i];
 
-    float x1 = x_center - (width / 2.0f);
-    float y1 = y_center - (height / 2.0f);
-    float x2 = x_center + (width / 2.0f);
-    float y2 = y_center + (height / 2.0f);
+    float x1 = dequantized_x_center - (dequantized_width / 2.0f);
+    float y1 = dequantized_y_center - (dequantized_height / 2.0f);
+    float x2 = dequantized_x_center + (dequantized_width / 2.0f);
+    float y2 = dequantized_y_center + (dequantized_height / 2.0f);
 
-    x1 = std::max(0.0f, std::min(x1, static_cast<float>(input_img->cols - 1)));
-    y1 = std::max(0.0f, std::min(y1, static_cast<float>(input_img->rows - 1)));
-    x2 = std::max(0.0f, std::min(x2, static_cast<float>(input_img->cols - 1)));
-    y2 = std::max(0.0f, std::min(y2, static_cast<float>(input_img->rows - 1)));
+    float clamped_x1 =
+        std::max(0.0f, std::min(x1, static_cast<float>(input_img->cols - 1)));
+    float clamped_y1 =
+        std::max(0.0f, std::min(y1, static_cast<float>(input_img->rows - 1)));
+    float clamped_x2 =
+        std::max(0.0f, std::min(x2, static_cast<float>(input_img->cols - 1)));
+    float clamped_y2 =
+        std::max(0.0f, std::min(y2, static_cast<float>(input_img->rows - 1)));
 
-    if (candidateResults.size() < 3) {
+    if (candidateResults.size() < 5) {
+      // This print has an intentional space at the beginning so as to make
+      // finding it in logs easier
       std::printf(
-          " DEBUG: box %d - Normalized: center(%.2f, %.2f) size(%.2f, %.2f)\n",
-          i, x_center, y_center, width, height);
-      std::printf("DEBUG: box %d - Final: (%.2f, %.2f) to (%.2f, %.2f), "
+          " DEBUG: box %d - Original: center(%d, %d) size(%d, %d)\n", i,
+          boxesData[i * 4 + 0], boxesData[i * 4 + 1], boxesData[i * 4 + 2],
+          boxesData[i * 4 + 3]);
+      std::printf(
+          "DEBUG: box %d - Dequantized: center(%.2f, %.2f) size(%.2f, %.2f)\n",
+          i, dequantized_x_center, dequantized_y_center, dequantized_width,
+          dequantized_height);
+      std::printf("DEBUG: box %d - Corners: (%.2f, %.2f) to (%.2f, %.2f), "
                   "score=%.3f, class=%d\n",
                   i, x1, y1, x2, y2, score, classId);
+
+      std::printf("DEBUG: box %d - Clamped Corners (FINAL): (%.2f, %.2f) to "
+                  "(%.2f, %.2f), "
+                  "score=%.3f, class=%d\n",
+                  i, clamped_x1, clamped_y1, clamped_x2, clamped_y2, score,
+                  classId);
     }
 
     detect_result_t det;
-    det.box.left = static_cast<int>(x1);
-    det.box.top = static_cast<int>(y1);
-    det.box.right = static_cast<int>(x2);
-    det.box.bottom = static_cast<int>(y2);
+    det.box.left = static_cast<int>(clamped_x1);
+    det.box.top = static_cast<int>(clamped_y1);
+    det.box.right = static_cast<int>(clamped_x2);
+    det.box.bottom = static_cast<int>(clamped_y2);
     det.obj_conf = score;
     det.id = classId;
 
