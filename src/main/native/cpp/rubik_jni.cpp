@@ -249,6 +249,9 @@ Java_org_photonvision_rubik_RubikJNI_create
   }
 
   TfLiteExternalDelegateOptionsInsert(delegateOpts, "backend_type", "htp");
+  TfLiteExternalDelegateOptionsInsert(delegateOpts, "htp_performance_mode", "burst");
+  TfLiteExternalDelegateOptionsInsert(delegateOpts, "htp_precision", "int8");
+  TfLiteExternalDelegateOptionsInsert(delegateOpts, "enable_htp", "1");
 
   // Create the delegate
   TfLiteDelegate *delegate = TfLiteExternalDelegateCreate(delegateOpts);
@@ -486,15 +489,15 @@ Java_org_photonvision_rubik_RubikJNI_detect
 
   type = rgb.type();
 
-  std::printf("DEBUG: Output image type: %d\n", type);
-  std::printf("DEBUG: Output channels: %d\n", rgb.channels());
+  std::printf("DEBUG: Converted image type: %d\n", type);
+  std::printf("DEBUG: Converted channels: %d\n", rgb.channels());
 
   if (type == CV_8UC3) {
-    std::printf("DEBUG: Output image is in RGB format\n");
+    std::printf("DEBUG: Converted image is in RGB format\n");
   } else if (type == CV_8UC1) {
-    std::printf("DEBUG: Output image is in Grayscale format\n");
+    std::printf("DEBUG: Converted image is in Grayscale format\n");
   } else {
-    std::printf("DEBUG: Output image has an unexpected type: %d\n", type);
+    std::printf("DEBUG: Converted image has an unexpected type: %d\n", type);
   }
 
   std::memcpy(TfLiteTensorData(input), rgb.data, TfLiteTensorByteSize(input));
@@ -567,11 +570,14 @@ Java_org_photonvision_rubik_RubikJNI_detect
     float dequantized_x_center =
         ((boxesData[i] - boxesParams.zero_point) * boxesParams.scale);
     float dequantized_y_center =
-        ((boxesData[i + numBoxes] - boxesParams.zero_point) * boxesParams.scale);
+        ((boxesData[i + numBoxes] - boxesParams.zero_point) *
+         boxesParams.scale);
     float dequantized_width =
-        ((boxesData[i + 2 * numBoxes] - boxesParams.zero_point) * boxesParams.scale);
+        ((boxesData[i + 2 * numBoxes] - boxesParams.zero_point) *
+         boxesParams.scale);
     float dequantized_height =
-        ((boxesData[i + 3 * numBoxes] - boxesParams.zero_point) * boxesParams.scale);
+        ((boxesData[i + 3 * numBoxes] - boxesParams.zero_point) *
+         boxesParams.scale);
 
     float score =
         (scoresData[i] - scoresParams.zero_point) * scoresParams.scale;
