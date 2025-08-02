@@ -49,6 +49,20 @@ typedef struct __detect_result_t {
   float obj_conf;
 } detect_result_t;
 
+// Helper function for proper dequantization like example.c
+static inline float get_dequant_value(void *data, TfLiteType tensor_type,
+                                      int idx, float zero_point, float scale) {
+  switch (tensor_type) {
+  case kTfLiteUInt8:
+    return (static_cast<uint8_t *>(data)[idx] - zero_point) * scale;
+  case kTfLiteFloat32:
+    return static_cast<float *>(data)[idx];
+  default:
+    break;
+  }
+  return 0.0f;
+}
+
 // JNI class reference (this can be global since it's shared)
 static jclass detectionResultClass = nullptr;
 static jclass runtimeExceptionClass = nullptr;
@@ -537,6 +551,25 @@ Java_org_photonvision_rubik_RubikJNI_detect
   const int numBoxes = TfLiteTensorDim(boxesTensor, 1);
   std::printf("INFO: Detected %d boxes\n", numBoxes);
 
+  // Debug tensor shapes
+  std::printf("DEBUG: Boxes tensor dimensions: ");
+  for (int i = 0; i < TfLiteTensorNumDims(boxesTensor); i++) {
+    std::printf("%d ", TfLiteTensorDim(boxesTensor, i));
+  }
+  std::printf("\n");
+
+  std::printf("DEBUG: Scores tensor dimensions: ");
+  for (int i = 0; i < TfLiteTensorNumDims(scoresTensor); i++) {
+    std::printf("%d ", TfLiteTensorDim(scoresTensor, i));
+  }
+  std::printf("\n");
+
+  std::printf("DEBUG: Classes tensor dimensions: ");
+  for (int i = 0; i < TfLiteTensorNumDims(classesTensor); i++) {
+    std::printf("%d ", TfLiteTensorDim(classesTensor, i));
+  }
+  std::printf("\n");
+
   if (TfLiteTensorType(boxesTensor) != kTfLiteUInt8) {
     ThrowRuntimeException(env, "Expected uint8 tensor type");
     return nullptr;
@@ -557,44 +590,49 @@ Java_org_photonvision_rubik_RubikJNI_detect
   uint8_t *classesData =
       static_cast<uint8_t *>(TfLiteTensorData(classesTensor));
 
-  std::vector<detect_result_t> candidateResults;
+  std::printf("DEBUG: Quantization params - boxes: zp=%d, scale=%f\n",
+              boxesParams.zero_point, boxesParams.scale);
+  std::printf("DEBUG: Quantization params - scores: zp=%d, scale=%f\n",
+              scoresParams.zero_point, scoresParams.scale);
 
-  // Scale factors for converting normalized to pixel space
-  float scaleX = static_cast<float>(input_img->cols);
-  float scaleY = static_cast<float>(input_img->rows);
+  std::vector<detect_result_t> candidateResults;
 
   std::printf("DEBUG: Image dimensions: %dx%d\n", input_img->cols,
               input_img->rows);
-  std::printf("DEBUG: Quantization params - boxes: zp=%d, scale=%f\n",
-              boxesParams.zero_point, boxesParams.scale);
 
   for (int i = 0; i < numBoxes; ++i) {
-    // DeQuantize
-    float dequantized_x_center =
-        ((boxesData[i] - boxesParams.zero_point) * boxesParams.scale);
-    float dequantized_y_center =
-        ((boxesData[i + numBoxes] - boxesParams.zero_point) *
-         boxesParams.scale);
-    float dequantized_width =
-        ((boxesData[i + 2 * numBoxes] - boxesParams.zero_point) *
-         boxesParams.scale);
-    float dequantized_height =
-        ((boxesData[i + 3 * numBoxes] - boxesParams.zero_point) *
-         boxesParams.scale);
-
+    // Use proper dequantization for score
     float score =
-        (scoresData[i] - scoresParams.zero_point) * scoresParams.scale;
+        get_dequant_value(scoresData, kTfLiteUInt8, i, scoresParams.zero_point,
+                          scoresParams.scale);
     if (score < boxThresh)
       continue;
 
     int classId = classesData[i];
 
-    // After dequantization, before calculating corners:
+    // For tensor shape [1, 8400, 4], use sequential indexing per detection
+    uint8_t raw_x_center_u8 = boxesData[i * 4 + 0];
+    uint8_t raw_y_center_u8 = boxesData[i * 4 + 1];
+    uint8_t raw_width_u8 = boxesData[i * 4 + 2];
+    uint8_t raw_height_u8 = boxesData[i * 4 + 3];
 
-    float x1 = dequantized_x_center - (dequantized_width / 2.0f);
-    float y1 = dequantized_y_center - (dequantized_height / 2.0f);
-    float x2 = dequantized_x_center + (dequantized_width / 2.0f);
-    float y2 = dequantized_y_center + (dequantized_height / 2.0f);
+    // Use proper dequantization for bbox coordinates (like we do for scores)
+    float x_center =
+        get_dequant_value(&raw_x_center_u8, kTfLiteUInt8, 0,
+                          boxesParams.zero_point, boxesParams.scale);
+    float y_center =
+        get_dequant_value(&raw_y_center_u8, kTfLiteUInt8, 0,
+                          boxesParams.zero_point, boxesParams.scale);
+    float width = get_dequant_value(&raw_width_u8, kTfLiteUInt8, 0,
+                                    boxesParams.zero_point, boxesParams.scale);
+    float height = get_dequant_value(&raw_height_u8, kTfLiteUInt8, 0,
+                                     boxesParams.zero_point, boxesParams.scale);
+
+    // Calculate corners
+    float x1 = x_center;
+    float y1 = y_center;
+    float x2 = x_center + (width / 2.0f);
+    float y2 = y_center + (height / 2.0f);
 
     float clamped_x1 =
         std::max(0.0f, std::min(x1, static_cast<float>(input_img->cols)));
@@ -611,24 +649,18 @@ Java_org_photonvision_rubik_RubikJNI_detect
     }
 
     if (candidateResults.size() < 5) {
-      // This print has an intentional space at the beginning so as to make
-      // finding it in logs easier
-      std::printf(" DEBUG: box %d - Original: center(%d, %d) size(%d, %d)\n", i,
-                  boxesData[i * 4 + 0], boxesData[i * 4 + 1],
-                  boxesData[i * 4 + 2], boxesData[i * 4 + 3]);
+      std::printf(" DEBUG: box %d - uint8: center(%d, %d) size(%d, %d)\n", i,
+                  raw_x_center_u8, raw_y_center_u8, raw_width_u8,
+                  raw_height_u8);
       std::printf(
-          "DEBUG: box %d - Dequantized: center(%.2f, %.2f) size(%.2f, %.2f)\n",
-          i, dequantized_x_center, dequantized_y_center, dequantized_width,
-          dequantized_height);
-      std::printf("DEBUG: box %d - Corners: (%.2f, %.2f) to (%.2f, %.2f), "
-                  "score=%.3f, class=%d\n",
-                  i, x1, y1, x2, y2, score, classId);
-
-      std::printf("DEBUG: box %d - Clamped Corners (FINAL): (%.2f, %.2f) to "
-                  "(%.2f, %.2f), "
-                  "score=%.3f, class=%d\n",
-                  i, clamped_x1, clamped_y1, clamped_x2, clamped_y2, score,
-                  classId);
+          "DEBUG: box %d - dequantized: center(%.2f, %.2f) size(%.2f, %.2f)\n",
+          i, x_center, y_center, width, height);
+      std::printf("DEBUG: box %d - corners: (%.2f, %.2f) to (%.2f, %.2f)\n", i,
+                  x1, y1, x2, y2);
+      std::printf(
+          "DEBUG: box %d - clamped corners: (%.2f, %.2f) to (%.2f, %.2f), "
+          "score=%.3f, class=%d\n",
+          i, clamped_x1, clamped_y1, clamped_x2, clamped_y2, score, classId);
     }
 
     detect_result_t det;
