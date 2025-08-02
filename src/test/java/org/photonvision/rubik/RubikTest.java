@@ -67,7 +67,7 @@ public class RubikTest {
         System.out.println("Image loaded: " + img.size() + " " + img.type());
 
         System.out.println("Creating Rubik detector");
-        long[] ptrs = RubikJNI.create("src/test/resources/yolov8nCOCO.tflite");
+        long[] ptrs = RubikJNI.create("src/test/resources/yolov8nCOCOv2.tflite");
 
         for (long ptr : ptrs) {
             if (ptr == 0) {

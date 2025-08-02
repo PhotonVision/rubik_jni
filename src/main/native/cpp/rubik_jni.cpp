@@ -544,8 +544,6 @@ Java_org_photonvision_rubik_RubikJNI_detect
 
     int classId = classesData[i];
 
-
-
     float x1 = x_center - (width / 2.0f);
     float y1 = y_center - (height / 2.0f);
     float x2 = x_center + (width / 2.0f);
@@ -556,10 +554,12 @@ Java_org_photonvision_rubik_RubikJNI_detect
     x2 = std::max(0.0f, std::min(x2, static_cast<float>(input_img->cols - 1)));
     y2 = std::max(0.0f, std::min(y2, static_cast<float>(input_img->rows - 1)));
 
-    if(candidateResults.size() < 3) {
-      std::printf(" DEBUG: box %d - Normalized: center(%.2f, %.2f) size(%.2f, %.2f)\n", 
-                  i, x_center, y_center, width, height);
-      std::printf("DEBUG: box %d - Final: (%.2f, %.2f) to (%.2f, %.2f), score=%.3f, class=%d\n", 
+    if (candidateResults.size() < 3) {
+      std::printf(
+          " DEBUG: box %d - Normalized: center(%.2f, %.2f) size(%.2f, %.2f)\n",
+          i, x_center, y_center, width, height);
+      std::printf("DEBUG: box %d - Final: (%.2f, %.2f) to (%.2f, %.2f), "
+                  "score=%.3f, class=%d\n",
                   i, x1, y1, x2, y2, score, classId);
     }
 
