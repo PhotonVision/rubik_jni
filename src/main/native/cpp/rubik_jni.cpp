@@ -248,11 +248,13 @@ Java_org_photonvision_rubik_RubikJNI_create
     return 0;
   }
 
-  TfLiteExternalDelegateOptionsInsert(delegateOpts, "backend_type", "htp");
-  TfLiteExternalDelegateOptionsInsert(delegateOpts, "htp_performance_mode",
-                                      "burst");
-  TfLiteExternalDelegateOptionsInsert(delegateOpts, "htp_precision", "int8");
-  TfLiteExternalDelegateOptionsInsert(delegateOpts, "enable_htp", "1");
+  if (TfLiteExternalDelegateOptionsInsert(delegateOpts, "backend_type",
+                                          "htp") != kTfLiteOk) {
+    std::printf("ERROR: Failed to set backend type to htp\n");
+    ThrowRuntimeException(env, "Failed to set backend type to htp");
+    env->ReleaseStringUTFChars(modelPath, model_name);
+    return 0;
+  }
 
   // Create the delegate
   TfLiteDelegate *delegate = TfLiteExternalDelegateCreate(delegateOpts);
