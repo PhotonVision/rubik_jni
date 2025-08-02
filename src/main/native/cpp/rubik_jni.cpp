@@ -565,13 +565,13 @@ Java_org_photonvision_rubik_RubikJNI_detect
   for (int i = 0; i < numBoxes; ++i) {
     // DeQuantize
     float dequantized_x_center =
-        ((boxesData[i * 4 + 0] - boxesParams.zero_point) * boxesParams.scale);
+        ((boxesData[i] - boxesParams.zero_point) * boxesParams.scale);
     float dequantized_y_center =
-        ((boxesData[i * 4 + 1] - boxesParams.zero_point) * boxesParams.scale);
+        ((boxesData[i + numBoxes] - boxesParams.zero_point) * boxesParams.scale);
     float dequantized_width =
-        ((boxesData[i * 4 + 2] - boxesParams.zero_point) * boxesParams.scale);
+        ((boxesData[i + 2 * numBoxes] - boxesParams.zero_point) * boxesParams.scale);
     float dequantized_height =
-        ((boxesData[i * 4 + 3] - boxesParams.zero_point) * boxesParams.scale);
+        ((boxesData[i + 3 * numBoxes] - boxesParams.zero_point) * boxesParams.scale);
 
     float score =
         (scoresData[i] - scoresParams.zero_point) * scoresParams.scale;
