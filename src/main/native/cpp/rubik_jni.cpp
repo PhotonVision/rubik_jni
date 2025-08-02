@@ -249,7 +249,8 @@ Java_org_photonvision_rubik_RubikJNI_create
   }
 
   TfLiteExternalDelegateOptionsInsert(delegateOpts, "backend_type", "htp");
-  TfLiteExternalDelegateOptionsInsert(delegateOpts, "htp_performance_mode", "burst");
+  TfLiteExternalDelegateOptionsInsert(delegateOpts, "htp_performance_mode",
+                                      "burst");
   TfLiteExternalDelegateOptionsInsert(delegateOpts, "htp_precision", "int8");
   TfLiteExternalDelegateOptionsInsert(delegateOpts, "enable_htp", "1");
 
