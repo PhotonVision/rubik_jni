@@ -483,38 +483,12 @@ Java_org_photonvision_rubik_RubikJNI_detect
     return nullptr;
   }
 
-  int type = input_img->type();
-
-  std::printf("DEBUG: Original input image type: %d\n", type);
-  std::printf("DEBUG: Original input channels: %d\n", input_img->channels());
-
-  if (type == CV_8UC3) {
-    std::printf("DEBUG: Input image is in BGR format\n");
-  } else if (type == CV_8UC1) {
-    std::printf("DEBUG: Input image is in Grayscale format\n");
-  } else {
-    std::printf("DEBUG: Input image has an unexpected type: %d\n", type);
-  }
-
   cv::Mat rgb;
   if (input_img->channels() == 3) {
     cv::cvtColor(*input_img, rgb, cv::COLOR_BGR2RGB);
   } else if (input_img->channels() == 1) {
     // Input is already grayscale, decide what to do
     rgb = input_img->clone(); // or convert to 3-channel if needed
-  }
-
-  type = rgb.type();
-
-  std::printf("DEBUG: Converted image type: %d\n", type);
-  std::printf("DEBUG: Converted channels: %d\n", rgb.channels());
-
-  if (type == CV_8UC3) {
-    std::printf("DEBUG: Converted image is in RGB format\n");
-  } else if (type == CV_8UC1) {
-    std::printf("DEBUG: Converted image is in Grayscale format\n");
-  } else {
-    std::printf("DEBUG: Converted image has an unexpected type: %d\n", type);
   }
 
   std::memcpy(TfLiteTensorData(input), rgb.data, TfLiteTensorByteSize(input));
