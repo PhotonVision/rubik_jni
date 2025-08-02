@@ -86,25 +86,33 @@ public class RubikTest {
         for (RubikResult result : ret) {
             System.out.println("Result: " + result);
 
+            Scalar color = new Scalar(0, 255, 0); // Green color is default for bounding box
+
+            if(result.class_id == 0) {
+                color = new Scalar(255, 0, 0); // Blue for person
+            } else if (result.class_id == 5) {
+                color = new Scalar(0, 0, 255); // Red for bus
+            }
+
             // Draw bounding box on the image
             Imgproc.rectangle(
                 img,
                 new Point(result.rect.x, result.rect.y),
                 new Point(result.rect.x + result.rect.width, result.rect.y + result.rect.height),
-                new Scalar(0, 255, 0), // Green color
+                color,
                 2 // Thickness
             );
 
             // Put label text
-            Imgproc.putText(
-                img,
-                result.class_id + " " + String.format("%.2f", result.conf),
-                new Point(result.rect.x, result.rect.y - 10),
-                Imgproc.FONT_HERSHEY_SIMPLEX,
-                0.5, // Font scale
-                new Scalar(0, 255, 0), // Green color
-                1 // Thickness
-            );
+            // Imgproc.putText(
+            //     img,
+            //     result.class_id + " " + String.format("%.2f", result.conf),
+            //     new Point(result.rect.x, result.rect.y - 10),
+            //     Imgproc.FONT_HERSHEY_SIMPLEX,
+            //     0.5, // Font scale
+            //     new Scalar(0, 255, 0), // Green color
+            //     1 // Thickness
+            // );
         }
 
         // Save the image with results
