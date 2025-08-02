@@ -582,15 +582,10 @@ Java_org_photonvision_rubik_RubikJNI_detect
 
     // After dequantization, before calculating corners:
 
-    float scaled_x_center = dequantized_x_center * input_img->cols;
-    float scaled_y_center = dequantized_y_center * input_img->rows;
-    float scaled_width = dequantized_width * input_img->cols;
-    float scaled_height = dequantized_height * input_img->rows;
-
-    float x1 = scaled_x_center - (scaled_width / 2.0f);
-    float y1 = scaled_y_center - (scaled_height / 2.0f);
-    float x2 = scaled_x_center + (scaled_width / 2.0f);
-    float y2 = scaled_y_center + (scaled_height / 2.0f);
+    float x1 = dequantized_x_center - (dequantized_width / 2.0f);
+    float y1 = dequantized_y_center - (dequantized_height / 2.0f);
+    float x2 = dequantized_x_center + (dequantized_width / 2.0f);
+    float y2 = dequantized_y_center + (dequantized_height / 2.0f);
 
     float clamped_x1 =
         std::max(0.0f, std::min(x1, static_cast<float>(input_img->cols)));
@@ -616,9 +611,6 @@ Java_org_photonvision_rubik_RubikJNI_detect
           "DEBUG: box %d - Dequantized: center(%.2f, %.2f) size(%.2f, %.2f)\n",
           i, dequantized_x_center, dequantized_y_center, dequantized_width,
           dequantized_height);
-      std::printf(
-          "DEBUG: box %d - Scaled: center(%.2f, %.2f) size(%.2f, %.2f)\n", i,
-          scaled_x_center, scaled_y_center, scaled_width, scaled_height);
       std::printf("DEBUG: box %d - Corners: (%.2f, %.2f) to (%.2f, %.2f), "
                   "score=%.3f, class=%d\n",
                   i, x1, y1, x2, y2, score, classId);
