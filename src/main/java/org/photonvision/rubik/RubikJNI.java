@@ -29,18 +29,18 @@ public class RubikJNI {
          * Create a RubikResult with the specified bounding box coordinates, confidence,
          * and class ID.
          *
-         * @param left     The left coordinate of the bounding box.
-         * @param top      The top coordinate of the bounding box.
-         * @param right    The right coordinate of the bounding box.
-         * @param bottom   The bottom coordinate of the bounding box.
+         * @param x1       The x coordinate of a vertex of the bounding box.
+         * @param y1       The y coordinate of a vertex of the bounding box.
+         * @param x2       The x coordinate of the opposite vertex of the bounding box.
+         * @param y2       The y coordinate of the opposite vertex of the bounding box.
          * @param conf     The confidence score of the detection.
          * @param class_id The class ID of the detected object.
          */
         public RubikResult(
-                int left, int top, int right, int bottom, float conf, int class_id) {
+                int x1, int y1, int x2, int y2, float conf, int class_id) {
             this.conf = conf;
             this.class_id = class_id;
-            this.rect = new Rect2d(new Point(left, top), new Point(right, bottom));
+            this.rect = new Rect2d(new Point(x1, y1), new Point(x2, y2));
         }
 
         public final Rect2d rect;
@@ -87,7 +87,7 @@ public class RubikJNI {
     /**
      * Create a RubikJNI instance with the specified model path.
      *
-     * @param modelPath
+     * @param modelPath Absolute path to the model file
      * @return An array of pointers, where the elements point to the interpreter, delegate, and model; respectively.
      */
     public static native long[] create(String modelPath);
@@ -105,6 +105,7 @@ public class RubikJNI {
      * @param interpreterPtr The pointer to the tflite interpreter.
      * @param imagePtr The pointer to the image data.
      * @param boxThresh The threshold for the bounding box detection.
+     * @param nmsThreshold The threshold for non-maximum suppression.
      * @return An array of {@link RubikJNI.RubikResult} objects containing the
      *         detection results.
      */
