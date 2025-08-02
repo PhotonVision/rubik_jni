@@ -593,13 +593,18 @@ Java_org_photonvision_rubik_RubikJNI_detect
     float y2 = scaled_y_center + (scaled_height / 2.0f);
 
     float clamped_x1 =
-        std::max(0.0f, std::min(x1, static_cast<float>(input_img->cols - 1)));
+        std::max(0.0f, std::min(x1, static_cast<float>(input_img->cols)));
     float clamped_y1 =
-        std::max(0.0f, std::min(y1, static_cast<float>(input_img->rows - 1)));
+        std::max(0.0f, std::min(y1, static_cast<float>(input_img->rows)));
     float clamped_x2 =
-        std::max(0.0f, std::min(x2, static_cast<float>(input_img->cols - 1)));
+        std::max(0.0f, std::min(x2, static_cast<float>(input_img->cols)));
     float clamped_y2 =
-        std::max(0.0f, std::min(y2, static_cast<float>(input_img->rows - 1)));
+        std::max(0.0f, std::min(y2, static_cast<float>(input_img->rows)));
+
+    // Skip bad boxes
+    if (clamped_x1 >= clamped_x2 || clamped_y1 >= clamped_y2) {
+      continue;
+    }
 
     if (candidateResults.size() < 5) {
       // This print has an intentional space at the beginning so as to make
@@ -611,9 +616,9 @@ Java_org_photonvision_rubik_RubikJNI_detect
           "DEBUG: box %d - Dequantized: center(%.2f, %.2f) size(%.2f, %.2f)\n",
           i, dequantized_x_center, dequantized_y_center, dequantized_width,
           dequantized_height);
-      std::printf("DEBUG: box %d - Scaled: center(%.2f, %.2f) size(%.2f, %.2f)\n",
-                  i, scaled_x_center, scaled_y_center, scaled_width,
-                  scaled_height);
+      std::printf(
+          "DEBUG: box %d - Scaled: center(%.2f, %.2f) size(%.2f, %.2f)\n", i,
+          scaled_x_center, scaled_y_center, scaled_width, scaled_height);
       std::printf("DEBUG: box %d - Corners: (%.2f, %.2f) to (%.2f, %.2f), "
                   "score=%.3f, class=%d\n",
                   i, x1, y1, x2, y2, score, classId);
@@ -626,10 +631,10 @@ Java_org_photonvision_rubik_RubikJNI_detect
     }
 
     detect_result_t det;
-    det.box.left = static_cast<int>(clamped_x1);
-    det.box.top = static_cast<int>(clamped_y1);
-    det.box.right = static_cast<int>(clamped_x2);
-    det.box.bottom = static_cast<int>(clamped_y2);
+    det.box.left = static_cast<int>(std::round(clamped_x1));
+    det.box.top = static_cast<int>(std::round(clamped_y1));
+    det.box.right = static_cast<int>(std::round(clamped_x2));
+    det.box.bottom = static_cast<int>(std::round(clamped_y2));
     det.obj_conf = score;
     det.id = classId;
 
