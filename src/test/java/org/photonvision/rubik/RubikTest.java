@@ -76,7 +76,7 @@ public class RubikTest {
         }
 
         System.out.println("Rubik detector created: " + ptrs.toString());
-        RubikResult[] ret = RubikJNI.detect(ptrs[0], img.getNativeObjAddr(), 0.5f, 0.4f);
+        RubikResult[] ret = RubikJNI.detect(ptrs[0], img.getNativeObjAddr(), 0.5f, 0.45f);
 
         System.out.println("Detection results: " + Arrays.toString(ret));
 
