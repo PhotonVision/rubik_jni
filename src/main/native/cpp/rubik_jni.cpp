@@ -486,9 +486,9 @@ Java_org_photonvision_rubik_RubikJNI_detect
   cv::Mat rgb;
   if (input_img->channels() == 3) {
     cv::cvtColor(*input_img, rgb, cv::COLOR_BGR2RGB);
-  } else if (input_img->channels() == 1) {
-    // Input is already grayscale, decide what to do
-    rgb = input_img->clone(); // or convert to 3-channel if needed
+  } else {
+    ThrowRuntimeException(env, "Input image must be RGB");
+    return nullptr;
   }
 
   std::memcpy(TfLiteTensorData(input), rgb.data, TfLiteTensorByteSize(input));
