@@ -83,20 +83,17 @@ set(TFLITE_INCLUDE_DIR
 )
 
 # Set TensorFlow Lite library - use absolute path and verify it exists
-set(TFLITE_LIB_PATH
+set(LIB_PATH
     "${CMAKE_CURRENT_SOURCE_DIR}/src/main/native/lib/"
     CACHE FILEPATH
     "Path to TensorFlow Lite library"
 )
 
-# Check if the library exists
-if(NOT EXISTS ${TFLITE_LIB_PATH})
-    message(
-        FATAL_ERROR
-        "TensorFlow Lite library not found at: ${TFLITE_LIB_PATH}"
-    )
+# Check if the library path exists
+if(NOT EXISTS ${LIB_PATH})
+    message(FATAL_ERROR "Library directory not found at: ${LIB_PATH}")
 else()
-    message(STATUS "Found TensorFlow Lite library: ${TFLITE_LIB_PATH}")
+    message(STATUS "Found library directory: ${LIB_PATH}")
 endif()
 
 set(CMAKE_INSTALL_RPATH "lib")
@@ -111,9 +108,10 @@ target_link_libraries(
     PUBLIC
         Threads::Threads
         ${OPENCV_LIB_PATH}
-        ${TFLITE_LIB_PATH}/libtensorflowlite_c.so
-        ${TFLITE_LIB_PATH}/libtensorflowlite.so
-        ${TFLITE_LIB_PATH}/libexternal_delegate.so
+        ${LIB_PATH}/libtensorflowlite_c.so
+        ${LIB_PATH}/libtensorflowlite.so
+        ${LIB_PATH}/libexternal_delegate.so
+        ${LIB_PATH}/libhexagon_delegate.so
 )
 
 target_include_directories(
@@ -132,8 +130,9 @@ include(GNUInstallDirs)
 install(TARGETS ${PROJECT_NAME})
 install(
     FILES
-        ${TFLITE_LIB_PATH}/libtensorflowlite_c.so
-        ${TFLITE_LIB_PATH}/libtensorflowlite.so
-        ${TFLITE_LIB_PATH}/libexternal_delegate.so
+        ${LIB_PATH}/libtensorflowlite_c.so
+        ${LIB_PATH}/libtensorflowlite.so
+        ${LIB_PATH}/libexternal_delegate.so
+        ${LIB_PATH}/libhexagon_delegate.so
     TYPE LIB
 )
