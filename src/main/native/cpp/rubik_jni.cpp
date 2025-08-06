@@ -252,15 +252,12 @@ Java_org_photonvision_rubik_RubikJNI_create
   std::printf("INFO: Loaded model file '%s'\n", model_name);
 
   // Create external delegate options
+  // We just have to trust that this creates okay, but conveniently if it fails
+  // the check when we insert options will catch it.
   TfLiteExternalDelegateOptions delegateOptsValue =
       TfLiteExternalDelegateOptionsDefault("libQnnTFLiteDelegate.so");
+
   TfLiteExternalDelegateOptions *delegateOpts = &delegateOptsValue;
-  if (!delegateOpts) {
-    std::printf("ERROR: Failed to create delegate options\n");
-    ThrowRuntimeException(env, "Failed to create delegate options");
-    env->ReleaseStringUTFChars(modelPath, model_name);
-    return 0;
-  }
 
   if (TfLiteExternalDelegateOptionsInsert(delegateOpts, "backend_type",
                                           "htp") != kTfLiteOk) {
