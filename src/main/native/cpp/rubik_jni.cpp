@@ -270,6 +270,22 @@ Java_org_photonvision_rubik_RubikJNI_create
     return 0;
   }
 
+  if (TfLiteExternalDelegateOptionsInsert(delegateOpts, "htp_use_conv_hmx",
+                                          "yes") != kTfLiteOk) {
+    std::printf("ERROR: Failed to enable convolutions\n");
+    ThrowRuntimeException(env, "Failed to enable convolutions");
+    env->ReleaseStringUTFChars(modelPath, model_name);
+    return 0;
+  }
+
+  if (TfLiteExternalDelegateOptionsInsert(delegateOpts, "htp_performance_mode",
+                                          "2") != kTfLiteOk) {
+    std::printf("ERROR: Failed to set htp performance mode\n");
+    ThrowRuntimeException(env, "Failed to set htp performance mode");
+    env->ReleaseStringUTFChars(modelPath, model_name);
+    return 0;
+  }
+
   // Create the delegate
   TfLiteDelegate *delegate = TfLiteExternalDelegateCreate(delegateOpts);
 
