@@ -1,5 +1,6 @@
 Note:
 
+Last build of tensorflow libraries was on version 2.19.0
 To build the necessary tensorflow libraries, the following commands can be used
 
 ```
