@@ -43,6 +43,12 @@ typedef struct _BOX_RECT {
   int bottom;
 } BOX_RECT;
 
+typedef struct RubikDetector {
+  TfLiteInterpreter *interpreter;
+  TfLiteDelegate *delegate;
+  TfLiteModel *model;
+} RubikDetector;
+
 typedef struct __detect_result_t {
   int id;
   BOX_RECT box;
@@ -226,9 +232,9 @@ void ThrowRuntimeException(JNIEnv *env, const char *message) {
 /*
  * Class:     org_photonvision_rubik_RubikJNI
  * Method:    create
- * Signature: (Ljava/lang/String;)?
+ * Signature: (Ljava/lang/String;)J
  */
-JNIEXPORT jarray JNICALL
+JNIEXPORT jlong JNICALL
 Java_org_photonvision_rubik_RubikJNI_create
   (JNIEnv *env, jobject obj, jstring modelPath)
 {
@@ -347,60 +353,47 @@ Java_org_photonvision_rubik_RubikJNI_create
 
   env->ReleaseStringUTFChars(modelPath, model_name);
 
-  jlongArray ptrs = env->NewLongArray(3);
-  if (!ptrs) {
-    std::cerr << "ERROR: Failed to create jlongArray" << std::endl;
-    ThrowRuntimeException(env, "Failed to create jlongArray");
-    TfLiteInterpreterDelete(interpreter);
-    TfLiteExternalDelegateDelete(delegate);
-    TfLiteModelDelete(model);
-    return nullptr;
-  }
+  // Create RubikDetector object
+  RubikDetector *detector = new RubikDetector;
+  detector->interpreter = interpreter;
+  detector->delegate = delegate;
+  detector->model = model;
 
-  jlong values[3];
-  values[0] = reinterpret_cast<jlong>(interpreter);
-  values[1] = reinterpret_cast<jlong>(delegate);
-  values[2] = reinterpret_cast<jlong>(model);
-
-  env->SetLongArrayRegion(ptrs, 0, 3, values);
+  // Convert RubikDetector pointer to jlong
+  jlong ptr = reinterpret_cast<jlong>(detector);
 
   std::printf("INFO: TensorFlow Lite initialization completed successfully\n");
 
-  return ptrs;
+  return ptr;
 }
 
 /*
  * Class:     org_photonvision_rubik_RubikJNI
  * Method:    destroy
- * Signature: ([J)V
+ * Signature: (J)V
  */
 JNIEXPORT void JNICALL
 Java_org_photonvision_rubik_RubikJNI_destroy
-  (JNIEnv *env, jclass, jlongArray ptrs)
+  (JNIEnv *env, jclass, jlong ptr)
 {
-  // Get the array elements ONCE
-  jlong *elements = env->GetLongArrayElements(ptrs, nullptr);
-  if (!elements) {
-    ThrowRuntimeException(env, "Failed to get array elements");
+  RubikDetector *detector = reinterpret_cast<RubikDetector *>(ptr);
+
+  if (!detector) {
+    std::printf("ERROR: Invalid RubikDetector pointer\n");
+    ThrowRuntimeException(env, "Invalid RubikDetector pointer");
     return;
   }
 
-  // Extract all pointers from the single array
-  TfLiteInterpreter *interpreter =
-      reinterpret_cast<TfLiteInterpreter *>(elements[0]);
-  TfLiteDelegate *delegate = reinterpret_cast<TfLiteDelegate *>(elements[1]);
-  TfLiteModel *model = reinterpret_cast<TfLiteModel *>(elements[2]);
-
-  // Release the array back to the JVM (CRITICAL!)
-  env->ReleaseLongArrayElements(ptrs, elements, 0);
-
   // Now safely use the pointers
-  if (interpreter)
-    TfLiteInterpreterDelete(interpreter);
-  if (delegate)
-    TfLiteExternalDelegateDelete(delegate);
-  if (model)
-    TfLiteModelDelete(model);
+  if (detector->interpreter)
+    TfLiteInterpreterDelete(detector->interpreter);
+  if (detector->delegate)
+    TfLiteExternalDelegateDelete(detector->delegate);
+  if (detector->model)
+    TfLiteModelDelete(detector->model);
+
+  // Delete the RubikDetector object
+  delete detector;
 
   std::printf("INFO: Object Detection instance destroyed successfully\n");
 }
@@ -472,11 +465,22 @@ optimizedNMS(std::vector<detect_result_t> &candidates, float nmsThreshold) {
  */
 JNIEXPORT jobjectArray JNICALL
 Java_org_photonvision_rubik_RubikJNI_detect
-  (JNIEnv *env, jobject obj, jlong interpreterPtr, jlong input_cvmat_ptr,
+  (JNIEnv *env, jobject obj, jlong ptr, jlong input_cvmat_ptr,
    jdouble boxThresh, jdouble nmsThreshold)
 {
-  TfLiteInterpreter *interpreter =
-      reinterpret_cast<TfLiteInterpreter *>(interpreterPtr);
+  RubikDetector *detector = reinterpret_cast<RubikDetector *>(ptr);
+
+  if (!detector) {
+    ThrowRuntimeException(env, "Invalid RubikDetector pointer");
+    return nullptr;
+  }
+
+  if (!detector->interpreter) {
+    ThrowRuntimeException(env, "Interpreter not initialized");
+    return nullptr;
+  }
+
+  TfLiteInterpreter *interpreter = detector->interpreter;
   if (!interpreter) {
     ThrowRuntimeException(env, "Invalid interpreter handle");
     return nullptr;

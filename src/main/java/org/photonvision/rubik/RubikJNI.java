@@ -88,26 +88,26 @@ public class RubikJNI {
      * Create a RubikJNI instance with the specified model path.
      *
      * @param modelPath Absolute path to the model file
-     * @return An array of pointers, where the elements point to the interpreter, delegate, and model; respectively.
+     * @return A pointer to a struct with the tflite detector instance.
      */
-    public static native long[] create(String modelPath);
+    public static native long create(String modelPath);
 
     /**
      * Destroy the RubikJNI instance.
      *
-     * @param ptrs The list of pointers to the interpreter, delegate, and model; in that order.
+     * @param ptr The pointer to the tflite detector instance.
      */
-    public static native void destroy(long[] ptrs);
+    public static native void destroy(long ptr);
 
     /**
      * Detect in the given image
      *
-     * @param interpreterPtr The pointer to the tflite interpreter.
+     * @param detectorPtr The pointer to the tflite detector instance.
      * @param imagePtr The pointer to the image data.
      * @param boxThresh The threshold for the bounding box detection.
      * @param nmsThreshold The threshold for non-maximum suppression.
      * @return An array of {@link RubikJNI.RubikResult} objects containing the
      *         detection results.
      */
-    public static native RubikResult[] detect(long interpreterPtr, long imagePtr, double boxThresh, double nmsThreshold);
+    public static native RubikResult[] detect(long detectorPtr, long imagePtr, double boxThresh, double nmsThreshold);
 }

@@ -18,27 +18,15 @@
 package org.photonvision.rubik;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
-import java.util.Timer;
-import java.util.stream.Collector;
-import java.util.stream.Collectors;
-
 import org.junit.jupiter.api.Test;
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
 import org.opencv.core.Scalar;
-import org.opencv.core.Size;
-import org.opencv.dnn.Dnn;
-import org.opencv.dnn.Net;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
 import org.photonvision.rubik.RubikJNI.RubikResult;
-
-import edu.wpi.first.cscore.CvSink;
-import edu.wpi.first.cscore.CvSource;
 import edu.wpi.first.util.CombinedRuntimeLoader;
 
 public class RubikTest {
@@ -67,21 +55,20 @@ public class RubikTest {
         System.out.println("Image loaded: " + img.size() + " " + img.type());
 
         System.out.println("Creating Rubik detector");
-        long[] ptrs = RubikJNI.create("src/test/resources/yolov8nCOCOv2.tflite");
+        long ptr = RubikJNI.create("src/test/resources/yolov8nCOCOv2.tflite");
 
-        for (long ptr : ptrs) {
             if (ptr == 0) {
                 throw new RuntimeException("Failed to create Rubik detector");
             }
-        }
 
-        System.out.println("Rubik detector created: " + ptrs.toString());
-        RubikResult[] ret = RubikJNI.detect(ptrs[0], img.getNativeObjAddr(), 0.5f, 0.45f);
+
+        System.out.println("Rubik detector created: " + ptr);
+        RubikResult[] ret = RubikJNI.detect(ptr, img.getNativeObjAddr(), 0.5f, 0.45f);
 
         System.out.println("Detection results: " + Arrays.toString(ret));
 
         System.out.println("Releasing Rubik detector");
-        RubikJNI.destroy(ptrs);
+        RubikJNI.destroy(ptr);
 
         for (RubikResult result : ret) {
             System.out.println("Result: " + result);
