@@ -111,7 +111,6 @@ target_link_libraries(
         ${LIB_PATH}/libtensorflowlite_c.so
         ${LIB_PATH}/libtensorflowlite.so
         ${LIB_PATH}/libexternal_delegate.so
-        ${LIB_PATH}/libhexagon_delegate.so
 )
 
 target_include_directories(
@@ -133,6 +132,5 @@ install(
         ${LIB_PATH}/libtensorflowlite_c.so
         ${LIB_PATH}/libtensorflowlite.so
         ${LIB_PATH}/libexternal_delegate.so
-        ${LIB_PATH}/libhexagon_delegate.so
     TYPE LIB
 )
