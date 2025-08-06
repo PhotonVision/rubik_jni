@@ -206,7 +206,7 @@ static jobject MakeJObject(JNIEnv *env, const detect_result_t &result) {
   jmethodID constructor =
       env->GetMethodID(detectionResultClass, "<init>", "(IIIIFI)V");
   if (!constructor) {
-    std::cerr << "ERROR: Could not find constructor for RknnResult"
+    std::cerr << "ERROR: Could not find constructor for RubikResult"
               << std::endl;
     return nullptr;
   }

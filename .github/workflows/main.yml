@@ -71,11 +71,11 @@ jobs:
     - uses: actions/upload-artifact@v4
       name: Upload jar
       with:
-        name: librknn-jar-pi-${{matrix.jar-name}}
+        name: librubik-jar-pi-${{matrix.jar-name}}
         path: ${{ github.workspace }}/build/libs/*.jar
     - uses: actions/upload-artifact@v4
       with:
-        name: librknn-${{ matrix.jar-name }}
+        name: librubik-${{ matrix.jar-name }}
         path: cmake_build/*.so
 
     # Push to dev release on pushes to master
