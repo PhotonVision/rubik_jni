@@ -265,6 +265,9 @@ Java_org_photonvision_rubik_RubikJNI_create
 
   TfLiteExternalDelegateOptions *delegateOpts = &delegateOptsValue;
 
+  // See
+  // https://docs.qualcomm.com/bundle/publicresource/topics/80-70014-54/external-delegate-options-for-qnn-delegate.html
+  // for what the various delegate options are
   if (TfLiteExternalDelegateOptionsInsert(delegateOpts, "backend_type",
                                           "htp") != kTfLiteOk) {
     std::printf("ERROR: Failed to set backend type to htp\n");
@@ -274,7 +277,7 @@ Java_org_photonvision_rubik_RubikJNI_create
   }
 
   if (TfLiteExternalDelegateOptionsInsert(delegateOpts, "htp_use_conv_hmx",
-                                          "yes") != kTfLiteOk) {
+                                          "1") != kTfLiteOk) {
     std::printf("ERROR: Failed to enable convolutions\n");
     ThrowRuntimeException(env, "Failed to enable convolutions");
     env->ReleaseStringUTFChars(modelPath, model_name);
