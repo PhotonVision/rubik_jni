@@ -36,6 +36,15 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/opencv.hpp>
 
+// Debug print macro
+#ifndef NDEBUG
+#define DEBUG_PRINT(...) std::printf(__VA_ARGS__)
+#else
+#define DEBUG_PRINT(...)                                                       \
+  do {                                                                         \
+  } while (0)
+#endif
+
 typedef struct _BOX_RECT {
   int left;
   int right;
@@ -165,7 +174,7 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved) {
 
 static jobject MakeJObject(JNIEnv *env, const detect_result_t &result) {
   if (!detectionResultClass) {
-std::printf("ERROR: detectionResultClass is null!\n");
+    std::printf("ERROR: detectionResultClass is null!\n");
     return nullptr;
   }
 
@@ -211,7 +220,7 @@ Java_org_photonvision_rubik_RubikJNI_create
     return 0;
   }
 
-  std::printf("INFO: Loaded model file '%s'\n", model_name);
+  DEBUG_PRINT("INFO: Loaded model file '%s'\n", model_name);
 
   // Create external delegate options
   // We just have to trust that this creates okay, but conveniently if it fails
@@ -253,10 +262,10 @@ Java_org_photonvision_rubik_RubikJNI_create
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
   } else {
-    std::printf("INFO: Created external delegate\n");
+    DEBUG_PRINT("INFO: Created external delegate\n");
   }
 
-  std::printf("INFO: Loaded external delegate\n");
+  DEBUG_PRINT("INFO: Loaded external delegate\n");
 
   // Create interpreter options
   TfLiteInterpreterOptions *interpreterOpts = TfLiteInterpreterOptionsCreate();
@@ -290,7 +299,7 @@ Java_org_photonvision_rubik_RubikJNI_create
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
   } else {
-    std::printf("INFO: Modified graph with external delegate\n");
+    DEBUG_PRINT("INFO: Modified graph with external delegate\n");
   }
 
   // Allocate tensors
@@ -313,7 +322,7 @@ Java_org_photonvision_rubik_RubikJNI_create
   // Convert RubikDetector pointer to jlong
   jlong ptr = reinterpret_cast<jlong>(detector);
 
-  std::printf("INFO: TensorFlow Lite initialization completed successfully\n");
+  DEBUG_PRINT("INFO: TensorFlow Lite initialization completed successfully\n");
 
   return ptr;
 }
@@ -345,7 +354,7 @@ Java_org_photonvision_rubik_RubikJNI_destroy
   // Delete the RubikDetector object
   delete detector;
 
-  std::printf("INFO: Object Detection instance destroyed successfully\n");
+  DEBUG_PRINT("INFO: Object Detection instance destroyed successfully\n");
 }
 
 inline float calculateIoU(const BOX_RECT &box1, const BOX_RECT &box2) {
@@ -475,7 +484,7 @@ Java_org_photonvision_rubik_RubikJNI_detect
   double elapsed_time = (end.tv_sec - start.tv_sec) * 1000.0 +
                         (end.tv_nsec - start.tv_nsec) / 1000000.0;
 
-  std::printf("INFO: Model execution time: %.2f ms\n", elapsed_time);
+  DEBUG_PRINT("INFO: Model execution time: %.2f ms\n", elapsed_time);
 
   const TfLiteTensor *boxesTensor =
       TfLiteInterpreterGetOutputTensor(interpreter, 0);
@@ -490,26 +499,32 @@ Java_org_photonvision_rubik_RubikJNI_detect
       TfLiteTensorQuantizationParams(scoresTensor);
 
   const int numBoxes = TfLiteTensorDim(boxesTensor, 1);
-  std::printf("INFO: Detected %d boxes\n", numBoxes);
+  DEBUG_PRINT("INFO: Detected %d boxes\n", numBoxes);
 
   // Debug tensor shapes
-  std::printf("DEBUG: Boxes tensor dimensions: ");
+  DEBUG_PRINT("DEBUG: Boxes tensor dimensions: ");
+#ifndef NDEBUG
   for (int i = 0; i < TfLiteTensorNumDims(boxesTensor); i++) {
     std::printf("%d ", TfLiteTensorDim(boxesTensor, i));
   }
   std::printf("\n");
+#endif
 
-  std::printf("DEBUG: Scores tensor dimensions: ");
+  DEBUG_PRINT("DEBUG: Scores tensor dimensions: ");
+#ifndef NDEBUG
   for (int i = 0; i < TfLiteTensorNumDims(scoresTensor); i++) {
     std::printf("%d ", TfLiteTensorDim(scoresTensor, i));
   }
   std::printf("\n");
+#endif
 
-  std::printf("DEBUG: Classes tensor dimensions: ");
+  DEBUG_PRINT("DEBUG: Classes tensor dimensions: ");
+#ifndef NDEBUG
   for (int i = 0; i < TfLiteTensorNumDims(classesTensor); i++) {
     std::printf("%d ", TfLiteTensorDim(classesTensor, i));
   }
   std::printf("\n");
+#endif
 
   if (TfLiteTensorType(boxesTensor) != kTfLiteUInt8) {
     ThrowRuntimeException(env, "Expected uint8 tensor type");
@@ -531,14 +546,14 @@ Java_org_photonvision_rubik_RubikJNI_detect
   uint8_t *classesData =
       static_cast<uint8_t *>(TfLiteTensorData(classesTensor));
 
-  std::printf("DEBUG: Quantization params - boxes: zp=%d, scale=%f\n",
+  DEBUG_PRINT("DEBUG: Quantization params - boxes: zp=%d, scale=%f\n",
               boxesParams.zero_point, boxesParams.scale);
-  std::printf("DEBUG: Quantization params - scores: zp=%d, scale=%f\n",
+  DEBUG_PRINT("DEBUG: Quantization params - scores: zp=%d, scale=%f\n",
               scoresParams.zero_point, scoresParams.scale);
 
   std::vector<detect_result_t> candidateResults;
 
-  std::printf("DEBUG: Image dimensions: %dx%d\n", input_img->cols,
+  DEBUG_PRINT("DEBUG: Image dimensions: %dx%d\n", input_img->cols,
               input_img->rows);
 
   for (int i = 0; i < numBoxes; ++i) {
@@ -589,6 +604,7 @@ Java_org_photonvision_rubik_RubikJNI_detect
       continue;
     }
 
+#ifndef NDEBUG
     if (candidateResults.size() < 5) {
       std::printf(" DEBUG: box %d - uint8: center(%d, %d) size(%d, %d)\n", i,
                   raw_x_center_u8, raw_y_center_u8, raw_width_u8,
@@ -603,6 +619,7 @@ Java_org_photonvision_rubik_RubikJNI_detect
           "score=%.3f, class=%d\n",
           i, clamped_x1, clamped_y1, clamped_x2, clamped_y2, score, classId);
     }
+#endif
 
     detect_result_t det;
     det.box.left = static_cast<int>(std::round(clamped_x1));
