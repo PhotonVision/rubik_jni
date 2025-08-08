@@ -106,4 +106,58 @@ public class RubikTest {
         Imgcodecs.imwrite("src/test/resources/bus_with_results.jpg", img);
         System.out.println("Results written to image and saved as bus_with_results.jpg");
     }
+    /**
+     * This test will create and destroy a Rubik detector repeatedly to try and cause memory leaks.
+     * To find a memory leak, it's necessary to manually watch memory as this test runs, as the test itself does not check memory.
+     * It can be enabled by setting the number of iterations, using the system property "memLeakTestIterations".
+     */
+    @Test
+    @org.junit.jupiter.api.condition.EnabledIf("isMemLeakTestEnabled")
+    public void memLeakFinder() {
+        try {
+            CombinedRuntimeLoader.loadLibraries(RubikTest.class, Core.NATIVE_LIBRARY_NAME);
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+
+        System.out.println(Core.getBuildInformation());
+        System.out.println(Core.OpenCLApiCallError);
+
+        System.out.println("Loading rubik_jni");
+        System.load("/home/ubuntu/rubik_jni/cmake_build/librubik_jni.so");
+
+        int numRuns = Integer.parseInt(System.getProperty("memLeakTestIterations"));
+
+        System.out.println("Starting memory leak finder test; running for " + numRuns + " iterations");
+        for( int i = 0; i < numRuns; i++) {
+            if (i % 1000 == 0) {
+                System.out.println("Iteration " + i);
+            }
+
+            // Create a Rubik detector instance
+            long ptr = RubikJNI.create("src/test/resources/yolov8nCoco.tflite");
+
+            if (ptr == 0) {
+                throw new RuntimeException("Failed to create Rubik detector");
+            }
+            RubikJNI.destroy(ptr);
+        }
+    }
+
+    // Helper method to determine if the memory leak test should be enabled
+    static boolean isMemLeakTestEnabled() {
+        String iterations = System.getProperty("memLeakTestIterations");
+        if (iterations == null || iterations.trim().isEmpty()) {
+            System.out.println("memLeakTestIterations property not set or empty; skipping memory leak test.");
+            return false;
+        }
+
+        try {
+            int numIterations = Integer.parseInt(iterations.trim());
+            return numIterations > 0;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
 }

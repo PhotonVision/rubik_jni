@@ -71,6 +71,10 @@ test {
         outputs.upToDateWhen {false}
         showStandardStreams = true
     }
+
+    if (project.hasProperty('memLeakTestIterations')) {
+        systemProperty 'memLeakTestIterations', project.property('memLeakTestIterations')
+    }
 }
 
 ext.nativeName = wpilibTools.platformMapper.currentPlatform.platformName;
