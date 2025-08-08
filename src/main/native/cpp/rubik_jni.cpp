@@ -205,15 +205,14 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved) {
 
 static jobject MakeJObject(JNIEnv *env, const detect_result_t &result) {
   if (!detectionResultClass) {
-    std::cerr << "ERROR: detectionResultClass is null" << std::endl;
+std::printf("ERROR: detectionResultClass is null!\n");
     return nullptr;
   }
 
   jmethodID constructor =
       env->GetMethodID(detectionResultClass, "<init>", "(IIIIFI)V");
   if (!constructor) {
-    std::cerr << "ERROR: Could not find constructor for RubikResult"
-              << std::endl;
+    std::printf("ERROR: Could not find constructor for RubikResult!\n");
     return nullptr;
   }
 
@@ -240,8 +239,6 @@ Java_org_photonvision_rubik_RubikJNI_create
 {
   const char *model_name = env->GetStringUTFChars(modelPath, nullptr);
   if (model_name == nullptr) {
-    std::cerr << "ERROR: Failed to retrieve model path from Java string."
-              << std::endl;
     ThrowRuntimeException(env, "Failed to retrieve model path");
     return 0;
   }
@@ -249,7 +246,6 @@ Java_org_photonvision_rubik_RubikJNI_create
   // Load the model
   TfLiteModel *model = TfLiteModelCreateFromFile(model_name);
   if (!model) {
-    std::printf("ERROR: Failed to load model file '%s'\n", model_name);
     ThrowRuntimeException(env, "Failed to load model file");
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
@@ -270,7 +266,6 @@ Java_org_photonvision_rubik_RubikJNI_create
   // for what the various delegate options are
   if (TfLiteExternalDelegateOptionsInsert(delegateOpts, "backend_type",
                                           "htp") != kTfLiteOk) {
-    std::printf("ERROR: Failed to set backend type to htp\n");
     ThrowRuntimeException(env, "Failed to set backend type to htp");
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
@@ -278,7 +273,6 @@ Java_org_photonvision_rubik_RubikJNI_create
 
   if (TfLiteExternalDelegateOptionsInsert(delegateOpts, "htp_use_conv_hmx",
                                           "1") != kTfLiteOk) {
-    std::printf("ERROR: Failed to enable convolutions\n");
     ThrowRuntimeException(env, "Failed to enable convolutions");
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
@@ -286,7 +280,6 @@ Java_org_photonvision_rubik_RubikJNI_create
 
   if (TfLiteExternalDelegateOptionsInsert(delegateOpts, "htp_performance_mode",
                                           "2") != kTfLiteOk) {
-    std::printf("ERROR: Failed to set htp performance mode\n");
     ThrowRuntimeException(env, "Failed to set htp performance mode");
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
@@ -296,7 +289,6 @@ Java_org_photonvision_rubik_RubikJNI_create
   TfLiteDelegate *delegate = TfLiteExternalDelegateCreate(delegateOpts);
 
   if (!delegate) {
-    std::printf("ERROR: Failed to create external delegate\n");
     ThrowRuntimeException(env, "Failed to create external delegate");
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
@@ -309,7 +301,6 @@ Java_org_photonvision_rubik_RubikJNI_create
   // Create interpreter options
   TfLiteInterpreterOptions *interpreterOpts = TfLiteInterpreterOptionsCreate();
   if (!interpreterOpts) {
-    std::printf("ERROR: Failed to create interpreter options\n");
     ThrowRuntimeException(env, "Failed to create interpreter options");
     TfLiteExternalDelegateDelete(delegate);
     env->ReleaseStringUTFChars(modelPath, model_name);
@@ -324,7 +315,6 @@ Java_org_photonvision_rubik_RubikJNI_create
   TfLiteInterpreterOptionsDelete(interpreterOpts);
 
   if (!interpreter) {
-    std::printf("ERROR: Failed to create interpreter\n");
     ThrowRuntimeException(env, "Failed to create interpreter");
     TfLiteExternalDelegateDelete(delegate);
     env->ReleaseStringUTFChars(modelPath, model_name);
@@ -334,7 +324,6 @@ Java_org_photonvision_rubik_RubikJNI_create
   // Modify graph with delegate
   if (TfLiteInterpreterModifyGraphWithDelegate(interpreter, delegate) !=
       kTfLiteOk) {
-    std::printf("ERROR: Failed to modify graph with delegate\n");
     ThrowRuntimeException(env, "Failed to modify graph with delegate");
     TfLiteInterpreterDelete(interpreter);
     TfLiteExternalDelegateDelete(delegate);
@@ -346,7 +335,6 @@ Java_org_photonvision_rubik_RubikJNI_create
 
   // Allocate tensors
   if (TfLiteInterpreterAllocateTensors(interpreter) != kTfLiteOk) {
-    std::printf("ERROR: Failed to allocate tensors\n");
     ThrowRuntimeException(env, "Failed to allocate tensors");
     TfLiteInterpreterDelete(interpreter);
     TfLiteExternalDelegateDelete(delegate);
@@ -382,7 +370,6 @@ Java_org_photonvision_rubik_RubikJNI_destroy
   RubikDetector *detector = reinterpret_cast<RubikDetector *>(ptr);
 
   if (!detector) {
-    std::printf("ERROR: Invalid RubikDetector pointer\n");
     ThrowRuntimeException(env, "Invalid RubikDetector pointer");
     return;
   }
