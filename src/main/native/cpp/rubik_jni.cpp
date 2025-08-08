@@ -118,46 +118,6 @@ bool tensor_image_dims(const TfLiteTensor *tensor, int *w, int *h, int *c) {
   return true;
 }
 
-void print_tensor_info(const TfLiteTensor *tensor) {
-  size_t tensor_size = TfLiteTensorByteSize(tensor);
-
-  std::printf("INFO:   Size: %lu bytes\n", tensor_size);
-
-  int num_dims = TfLiteTensorNumDims(tensor);
-
-  std::printf("INFO:   Dimension: ");
-
-  for (int i = 0; i < num_dims; i++)
-    std::printf("%d%s", TfLiteTensorDim(tensor, i),
-                i == num_dims - 1 ? "" : "x");
-
-  std::printf("\n");
-
-  switch (TfLiteTensorType(tensor)) {
-  case kTfLiteFloat16:
-    std::printf("INFO:   Type: f16\n");
-    break;
-  case kTfLiteFloat32:
-    std::printf("INFO:   Type: f32\n");
-    break;
-  case kTfLiteUInt8:
-    std::printf("INFO:   Type: u8 \n");
-    break;
-  case kTfLiteUInt32:
-    std::printf("INFO:   Type: u32\n");
-    break;
-  case kTfLiteInt8:
-    std::printf("INFO:   Type: i8 \n");
-    break;
-  case kTfLiteInt32:
-    std::printf("INFO:   Type: i32\n");
-    break;
-  default:
-    std::printf("INFO:   Type: ???\n");
-    break;
-  }
-}
-
 extern "C" {
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
   JNIEnv *env;
