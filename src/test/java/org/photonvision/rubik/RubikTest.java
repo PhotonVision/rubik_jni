@@ -20,7 +20,6 @@ package org.photonvision.rubik;
 import java.io.IOException;
 import java.util.Arrays;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIf;
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
@@ -165,5 +164,65 @@ public class RubikTest {
             }
             RubikJNI.destroy(ptr);
         }
+    }
+
+    static boolean benchmarkEnabled() {
+        return isIterationTestEnabled("benchmarkIterations");
+    }
+
+    /**
+     * This test will run the detect function repeatedly to benchmark performance.
+     * It can be enabled by setting the number of iterations, using the system property "benchmarkIterations".
+     */
+    @Test
+    @org.junit.jupiter.api.condition.EnabledIf("benchmarkEnabled")
+    public void benchmark(){
+        System.out.println("Running benchmark test");
+        try {
+            CombinedRuntimeLoader.loadLibraries(RubikTest.class, Core.NATIVE_LIBRARY_NAME);
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+
+        System.out.println(Core.getBuildInformation());
+        System.out.println(Core.OpenCLApiCallError);
+
+        System.out.println("Loading rubik_jni");
+        System.load("/home/ubuntu/rubik_jni/cmake_build/librubik_jni.so");
+
+        System.out.println("Loading bus");
+        Mat img = Imgcodecs.imread("src/test/resources/bus.jpg");
+
+        if (img.empty()) {
+            throw new RuntimeException("Failed to load image");
+        }
+
+        System.out.println("Image loaded: " + img.size() + " " + img.type());
+
+        System.out.println("Creating Rubik detector");
+        long ptr = RubikJNI.create("src/test/resources/yolov8nCoco.tflite");
+
+            if (ptr == 0) {
+                throw new RuntimeException("Failed to create Rubik detector");
+            }
+
+        int numRuns = Integer.parseInt(System.getProperty("benchmarkIterations"));
+        System.out.println("Starting benchmark; running for " + numRuns + " iterations");
+
+        long startTime = System.nanoTime();
+
+        for( int i = 0; i < numRuns; i++) {
+            RubikResult[] ret = RubikJNI.detect(ptr, img.getNativeObjAddr(), 0.5f, 0.45f);
+        }
+
+        long endTime = System.nanoTime();
+        long duration = endTime - startTime; // Duration in nanoseconds
+        double avgDurationMs = (duration / 1_000_000.0) / numRuns; // Average duration in milliseconds
+
+        System.out.printf("Benchmark complete. Average detection time: %.2f ms over %d runs.%n", avgDurationMs, numRuns);
+
+        System.out.println("Releasing Rubik detector");
+        RubikJNI.destroy(ptr);
     }
 }
