@@ -20,8 +20,10 @@
  */
 
 #include <jni.h>
-#include <tensorflow/lite/c/c_api.h>
-#include <tensorflow/lite/c/c_api_experimental.h>
+#include <tensorflow/lite/interpreter.h>
+#include <tensorflow/lite/kernels/register.h>
+#include <tensorflow/lite/model.h>
+#include <tensorflow/lite/optional_debug_tools.h>
 #include <tensorflow/lite/delegates/external/external_delegate.h>
 #include <tensorflow/lite/version.h>
 
@@ -53,9 +55,10 @@ typedef struct _BOX_RECT {
 } BOX_RECT;
 
 typedef struct RubikDetector {
-  TfLiteInterpreter *interpreter;
-  TfLiteDelegate *delegate;
-  TfLiteModel *model;
+  std::unique_ptr<tflite::Interpreter> interpreter;
+  std::unique_ptr<tflite::FlatBufferModel> model;
+  std::unique_ptr<tflite::ops::builtin::BuiltinOpResolver> resolver;
+  TfLiteDelegate *delegate; // Still using C API for external delegate
 } RubikDetector;
 
 typedef struct __detect_result_t {
@@ -64,7 +67,7 @@ typedef struct __detect_result_t {
   float obj_conf;
 } detect_result_t;
 
-// Helper function for proper dequantization like example.c
+// Helper function for proper dequantization
 static inline float get_dequant_value(void *data, TfLiteType tensor_type,
                                       int idx, float zero_point, float scale) {
   switch (tensor_type) {
@@ -85,11 +88,11 @@ static jclass runtimeExceptionClass = nullptr;
 // Guesses the width, height, and channels of a tensor if it were an image.
 // Returns false on failure.
 bool tensor_image_dims(const TfLiteTensor *tensor, int *w, int *h, int *c) {
-  int n = TfLiteTensorNumDims(tensor);
+  int n = tensor->dims->size;
   int cursor = 0;
 
   for (int i = 0; i < n; i++) {
-    int dim = TfLiteTensorDim(tensor, i);
+    int dim = tensor->dims->data[i];
     if (dim == 0)
       return false;
     if (dim == 1)
@@ -212,8 +215,9 @@ Java_org_photonvision_rubik_RubikJNI_create
     return 0;
   }
 
-  // Load the model
-  TfLiteModel *model = TfLiteModelCreateFromFile(model_name);
+  // Load the model using C++ API
+  std::unique_ptr<tflite::FlatBufferModel> model =
+      tflite::FlatBufferModel::BuildFromFile(model_name);
   if (!model) {
     ThrowRuntimeException(env, "Failed to load model file");
     env->ReleaseStringUTFChars(modelPath, model_name);
@@ -222,9 +226,21 @@ Java_org_photonvision_rubik_RubikJNI_create
 
   DEBUG_PRINT("INFO: Loaded model file '%s'\n", model_name);
 
-  // Create external delegate options
-  // We just have to trust that this creates okay, but conveniently if it fails
-  // the check when we insert options will catch it.
+  // Create resolver
+  std::unique_ptr<tflite::ops::builtin::BuiltinOpResolver> resolver =
+      std::make_unique<tflite::ops::builtin::BuiltinOpResolver>();
+
+  // Build interpreter
+  std::unique_ptr<tflite::Interpreter> interpreter;
+  tflite::InterpreterBuilder builder(*model, *resolver);
+  
+  if (builder(&interpreter) != kTfLiteOk || !interpreter) {
+    ThrowRuntimeException(env, "Failed to build interpreter");
+    env->ReleaseStringUTFChars(modelPath, model_name);
+    return 0;
+  }
+
+  // Create external delegate options (still using C API for external delegate)
   TfLiteExternalDelegateOptions delegateOptsValue =
       TfLiteExternalDelegateOptionsDefault("libQnnTFLiteDelegate.so");
 
@@ -265,36 +281,9 @@ Java_org_photonvision_rubik_RubikJNI_create
     DEBUG_PRINT("INFO: Created external delegate\n");
   }
 
-  DEBUG_PRINT("INFO: Loaded external delegate\n");
-
-  // Create interpreter options
-  TfLiteInterpreterOptions *interpreterOpts = TfLiteInterpreterOptionsCreate();
-  if (!interpreterOpts) {
-    ThrowRuntimeException(env, "Failed to create interpreter options");
-    TfLiteExternalDelegateDelete(delegate);
-    env->ReleaseStringUTFChars(modelPath, model_name);
-    return 0;
-  }
-
-  TfLiteInterpreterOptionsAddDelegate(interpreterOpts, delegate);
-
-  // Create the interpreter
-  TfLiteInterpreter *interpreter =
-      TfLiteInterpreterCreate(model, interpreterOpts);
-  TfLiteInterpreterOptionsDelete(interpreterOpts);
-
-  if (!interpreter) {
-    ThrowRuntimeException(env, "Failed to create interpreter");
-    TfLiteExternalDelegateDelete(delegate);
-    env->ReleaseStringUTFChars(modelPath, model_name);
-    return 0;
-  }
-
-  // Modify graph with delegate
-  if (TfLiteInterpreterModifyGraphWithDelegate(interpreter, delegate) !=
-      kTfLiteOk) {
+  // Modify graph with delegate using C++ API
+  if (interpreter->ModifyGraphWithDelegate(delegate) != kTfLiteOk) {
     ThrowRuntimeException(env, "Failed to modify graph with delegate");
-    TfLiteInterpreterDelete(interpreter);
     TfLiteExternalDelegateDelete(delegate);
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
@@ -302,10 +291,9 @@ Java_org_photonvision_rubik_RubikJNI_create
     DEBUG_PRINT("INFO: Modified graph with external delegate\n");
   }
 
-  // Allocate tensors
-  if (TfLiteInterpreterAllocateTensors(interpreter) != kTfLiteOk) {
+  // Allocate tensors using C++ API
+  if (interpreter->AllocateTensors() != kTfLiteOk) {
     ThrowRuntimeException(env, "Failed to allocate tensors");
-    TfLiteInterpreterDelete(interpreter);
     TfLiteExternalDelegateDelete(delegate);
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
@@ -315,9 +303,10 @@ Java_org_photonvision_rubik_RubikJNI_create
 
   // Create RubikDetector object
   RubikDetector *detector = new RubikDetector;
-  detector->interpreter = interpreter;
+  detector->interpreter = std::move(interpreter);
+  detector->model = std::move(model);
+  detector->resolver = std::move(resolver);
   detector->delegate = delegate;
-  detector->model = model;
 
   // Convert RubikDetector pointer to jlong
   jlong ptr = reinterpret_cast<jlong>(detector);
@@ -343,13 +332,11 @@ Java_org_photonvision_rubik_RubikJNI_destroy
     return;
   }
 
-  // Now safely use the pointers
-  if (detector->interpreter)
-    TfLiteInterpreterDelete(detector->interpreter);
+  // Clean up delegate (still using C API)
   if (detector->delegate)
     TfLiteExternalDelegateDelete(detector->delegate);
-  if (detector->model)
-    TfLiteModelDelete(detector->model);
+
+  // C++ unique_ptr will automatically clean up interpreter, model, and resolver
 
   // Delete the RubikDetector object
   delete detector;
@@ -439,13 +426,19 @@ Java_org_photonvision_rubik_RubikJNI_detect
     return nullptr;
   }
 
-  TfLiteInterpreter *interpreter = detector->interpreter;
+  tflite::Interpreter *interpreter = detector->interpreter.get();
   if (!interpreter) {
     ThrowRuntimeException(env, "Invalid interpreter handle");
     return nullptr;
   }
 
-  TfLiteTensor *input = TfLiteInterpreterGetInputTensor(interpreter, 0);
+  // Get input tensor using C++ API
+  TfLiteTensor *input = interpreter->input_tensor(0);
+  if (!input) {
+    ThrowRuntimeException(env, "Failed to get input tensor");
+    return nullptr;
+  }
+
   int in_w, in_h, in_c;
   if (!tensor_image_dims(input, &in_w, &in_h, &in_c)) {
     ThrowRuntimeException(env, "Invalid input tensor shape");
@@ -467,13 +460,14 @@ Java_org_photonvision_rubik_RubikJNI_detect
     return nullptr;
   }
 
-  std::memcpy(TfLiteTensorData(input), rgb.data, TfLiteTensorByteSize(input));
+  std::memcpy(input->data.raw, rgb.data, input->bytes);
 
   // Start timer for benchmark
   struct timespec start, end;
   clock_gettime(CLOCK_MONOTONIC, &start); // Start timing
 
-  if (TfLiteInterpreterInvoke(interpreter) != kTfLiteOk) {
+  // Invoke using C++ API
+  if (interpreter->Invoke() != kTfLiteOk) {
     ThrowRuntimeException(env, "Interpreter invocation failed");
     return nullptr;
   }
@@ -486,70 +480,70 @@ Java_org_photonvision_rubik_RubikJNI_detect
 
   DEBUG_PRINT("INFO: Model execution time: %.2f ms\n", elapsed_time);
 
-  const TfLiteTensor *boxesTensor =
-      TfLiteInterpreterGetOutputTensor(interpreter, 0);
-  const TfLiteTensor *scoresTensor =
-      TfLiteInterpreterGetOutputTensor(interpreter, 1);
-  const TfLiteTensor *classesTensor =
-      TfLiteInterpreterGetOutputTensor(interpreter, 2);
+  // Get output tensors using C++ API
+  const TfLiteTensor *boxesTensor = interpreter->output_tensor(0);
+  const TfLiteTensor *scoresTensor = interpreter->output_tensor(1);
+  const TfLiteTensor *classesTensor = interpreter->output_tensor(2);
 
-  const TfLiteQuantizationParams boxesParams =
-      TfLiteTensorQuantizationParams(boxesTensor);
-  const TfLiteQuantizationParams scoresParams =
-      TfLiteTensorQuantizationParams(scoresTensor);
+  if (!boxesTensor || !scoresTensor || !classesTensor) {
+    ThrowRuntimeException(env, "Failed to get output tensors");
+    return nullptr;
+  }
 
-  const int numBoxes = TfLiteTensorDim(boxesTensor, 1);
+  const TfLiteQuantizationParams boxesParams = boxesTensor->params;
+  const TfLiteQuantizationParams scoresParams = scoresTensor->params;
+
+  const int numBoxes = boxesTensor->dims->data[1];
   DEBUG_PRINT("INFO: Detected %d boxes\n", numBoxes);
 
   // Debug tensor shapes
   DEBUG_PRINT("DEBUG: Boxes tensor dimensions: ");
 #ifndef NDEBUG
-  for (int i = 0; i < TfLiteTensorNumDims(boxesTensor); i++) {
-    std::printf("%d ", TfLiteTensorDim(boxesTensor, i));
+  for (int i = 0; i < boxesTensor->dims->size; i++) {
+    std::printf("%d ", boxesTensor->dims->data[i]);
   }
   std::printf("\n");
 #endif
 
   DEBUG_PRINT("DEBUG: Scores tensor dimensions: ");
 #ifndef NDEBUG
-  for (int i = 0; i < TfLiteTensorNumDims(scoresTensor); i++) {
-    std::printf("%d ", TfLiteTensorDim(scoresTensor, i));
+  for (int i = 0; i < scoresTensor->dims->size; i++) {
+    std::printf("%d ", scoresTensor->dims->data[i]);
   }
   std::printf("\n");
 #endif
 
   DEBUG_PRINT("DEBUG: Classes tensor dimensions: ");
 #ifndef NDEBUG
-  for (int i = 0; i < TfLiteTensorNumDims(classesTensor); i++) {
-    std::printf("%d ", TfLiteTensorDim(classesTensor, i));
+  for (int i = 0; i < classesTensor->dims->size; i++) {
+    std::printf("%d ", classesTensor->dims->data[i]);
   }
   std::printf("\n");
 #endif
 
-  if (TfLiteTensorType(boxesTensor) != kTfLiteUInt8) {
-    ThrowRuntimeException(env, "Expected uint8 tensor type");
+  if (boxesTensor->type != kTfLiteUInt8) {
+    ThrowRuntimeException(env, "Expected uint8 tensor type for boxes");
     return nullptr;
   }
 
-  if (TfLiteTensorType(scoresTensor) != kTfLiteUInt8) {
-    ThrowRuntimeException(env, "Expected uint8 tensor type");
+  if (scoresTensor->type != kTfLiteUInt8) {
+    ThrowRuntimeException(env, "Expected uint8 tensor type for scores");
     return nullptr;
   }
 
-  if (TfLiteTensorType(classesTensor) != kTfLiteUInt8) {
-    ThrowRuntimeException(env, "Expected uint8 tensor type");
+  if (classesTensor->type != kTfLiteUInt8) {
+    ThrowRuntimeException(env, "Expected uint8 tensor type for classes");
     return nullptr;
   }
 
-  uint8_t *boxesData = static_cast<uint8_t *>(TfLiteTensorData(boxesTensor));
-  uint8_t *scoresData = static_cast<uint8_t *>(TfLiteTensorData(scoresTensor));
-  uint8_t *classesData =
-      static_cast<uint8_t *>(TfLiteTensorData(classesTensor));
+  uint8_t *boxesData = boxesTensor->data.uint8;
+  uint8_t *scoresData = scoresTensor->data.uint8;
+  uint8_t *classesData = classesTensor->data.uint8;
 
   DEBUG_PRINT("DEBUG: Quantization params - boxes: zp=%d, scale=%f\n",
-              boxesParams.zero_point, boxesParams.scale);
+              static_cast<int>(boxesParams.zero_point), boxesParams.scale);
   DEBUG_PRINT("DEBUG: Quantization params - scores: zp=%d, scale=%f\n",
-              scoresParams.zero_point, scoresParams.scale);
+              static_cast<int>(scoresParams.zero_point), scoresParams.scale);
 
   std::vector<detect_result_t> candidateResults;
 
