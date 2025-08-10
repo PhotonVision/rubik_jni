@@ -20,6 +20,7 @@ package org.photonvision.rubik;
 import java.io.IOException;
 import java.util.Arrays;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIf;
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
@@ -106,13 +107,34 @@ public class RubikTest {
         Imgcodecs.imwrite("src/test/resources/bus_with_results.jpg", img);
         System.out.println("Results written to image and saved as bus_with_results.jpg");
     }
+
+        // Helper method to determine if the memory leak test should be enabled
+        static boolean isIterationTestEnabled(String param) {
+            String iterations = System.getProperty(param);
+            if (iterations == null || iterations.trim().isEmpty()) {
+                System.out.println(param + " property not set or empty; skipping memory leak test.");
+                return false;
+            }
+    
+            try {
+                int numIterations = Integer.parseInt(iterations.trim());
+                return numIterations > 0;
+            } catch (NumberFormatException e) {
+                return false;
+            }
+        }
+
+    static boolean memLeakEnabled() {
+        return isIterationTestEnabled("memLeakTestIterations");
+    }
+
     /**
      * This test will create and destroy a Rubik detector repeatedly to try and cause memory leaks.
      * To find a memory leak, it's necessary to manually watch memory as this test runs, as the test itself does not check memory.
      * It can be enabled by setting the number of iterations, using the system property "memLeakTestIterations".
      */
     @Test
-    @org.junit.jupiter.api.condition.EnabledIf("isMemLeakTestEnabled")
+    @org.junit.jupiter.api.condition.EnabledIf("memLeakEnabled")
     public void memLeakFinder() {
         try {
             CombinedRuntimeLoader.loadLibraries(RubikTest.class, Core.NATIVE_LIBRARY_NAME);
@@ -142,22 +164,6 @@ public class RubikTest {
                 throw new RuntimeException("Failed to create Rubik detector");
             }
             RubikJNI.destroy(ptr);
-        }
-    }
-
-    // Helper method to determine if the memory leak test should be enabled
-    static boolean isMemLeakTestEnabled() {
-        String iterations = System.getProperty("memLeakTestIterations");
-        if (iterations == null || iterations.trim().isEmpty()) {
-            System.out.println("memLeakTestIterations property not set or empty; skipping memory leak test.");
-            return false;
-        }
-
-        try {
-            int numIterations = Integer.parseInt(iterations.trim());
-            return numIterations > 0;
-        } catch (NumberFormatException e) {
-            return false;
         }
     }
 }
