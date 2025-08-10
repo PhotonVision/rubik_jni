@@ -646,4 +646,50 @@ Java_org_photonvision_rubik_RubikJNI_detect
   return jResults;
 }
 
+/*
+ * Class:     org_photonvision_rubik_RubikJNI
+ * Method:    isQuantized
+ * Signature: (J)Z
+ */
+JNIEXPORT jboolean JNICALL
+Java_org_photonvision_rubik_RubikJNI_isQuantized
+  (JNIEnv *env, jobject obj, jlong ptr)
+{
+  RubikDetector *detector = reinterpret_cast<RubikDetector *>(ptr);
+
+  if (!detector) {
+    ThrowRuntimeException(env, "Invalid RubikDetector pointer");
+    return JNI_FALSE;
+  }
+
+  if (!detector->interpreter) {
+    ThrowRuntimeException(env, "Interpreter not initialized");
+    return JNI_FALSE;
+  }
+
+  TfLiteInterpreter *interpreter = detector->interpreter;
+
+  if (!interpreter) {
+    ThrowRuntimeException(env, "Invalid interpreter handle");
+    return JNI_FALSE;
+  }
+
+  // Check if the input tensor is quantized
+  TfLiteTensor *input = TfLiteInterpreterGetInputTensor(interpreter, 0);
+  if (!input) {
+    ThrowRuntimeException(env, "Failed to get input tensor");
+    return JNI_FALSE;
+  }
+
+  // Check if the tensor type is kTfLiteUInt8
+  TfLiteType tensorType = TfLiteTensorType(input);
+
+  if (tensorType == kTfLiteUInt8) {
+    DEBUG_PRINT("INFO: Input tensor is quantized\n");
+    return JNI_TRUE; // The model is quantized
+  } else {
+    DEBUG_PRINT("INFO: Input tensor is not quantized\n");
+    return JNI_FALSE; // The model is not quantized
+  }
+}
 } // extern "C"

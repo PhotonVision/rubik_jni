@@ -110,4 +110,12 @@ public class RubikJNI {
      *         detection results.
      */
     public static native RubikResult[] detect(long detectorPtr, long imagePtr, double boxThresh, double nmsThreshold);
+
+    /**
+     * Check model quantization.
+     *
+     * @param detectorPtr The pointer to the tflite detector instance.
+     * @return A boolean indicating whether the model is quantized.
+     */
+    public static native boolean isQuantized(long detectorPtr);
 }
