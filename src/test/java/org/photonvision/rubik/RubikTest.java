@@ -17,6 +17,8 @@
 
 package org.photonvision.rubik;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.io.IOException;
 import java.util.Arrays;
 import org.junit.jupiter.api.Test;
@@ -63,6 +65,9 @@ public class RubikTest {
 
 
         System.out.println("Rubik detector created: " + ptr);
+
+        assertTrue(RubikJNI.isQuantized(ptr), "Rubik detector should be quantized");
+
         RubikResult[] ret = RubikJNI.detect(ptr, img.getNativeObjAddr(), 0.5f, 0.45f);
 
         System.out.println("Detection results: " + Arrays.toString(ret));
