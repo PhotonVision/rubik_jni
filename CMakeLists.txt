@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 
 project(rubik_jni)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17) # Changed from 14 to 17 for better C++ support
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(ENABLE_ASAN)
@@ -55,6 +55,28 @@ fetchcontent_declare(
 )
 fetchcontent_makeavailable(opencv_header)
 
+# Add FlatBuffers with proper configuration
+include(FetchContent)
+
+fetchcontent_declare(
+    flatbuffers
+    GIT_REPOSITORY https://github.com/google/flatbuffers.git
+    GIT_TAG v24.3.25
+)
+
+# Configure FlatBuffers options before making available
+set(FLATBUFFERS_BUILD_TESTS OFF CACHE BOOL "Build FlatBuffers tests" FORCE)
+set(FLATBUFFERS_INSTALL OFF CACHE BOOL "Install FlatBuffers" FORCE)
+set(FLATBUFFERS_BUILD_FLATC OFF CACHE BOOL "Build FlatBuffers compiler" FORCE)
+set(FLATBUFFERS_BUILD_FLATHASH
+    OFF
+    CACHE BOOL
+    "Build FlatBuffers hash tool"
+    FORCE
+)
+
+fetchcontent_makeavailable(flatbuffers)
+
 # This probably doesn't work great with shared libraries, but I don't care about those right now
 file(
     GLOB_RECURSE OPENCV_LIB_PATH
@@ -101,16 +123,16 @@ set(CMAKE_INSTALL_RPATH "lib")
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
-add_library(${PROJECT_NAME} src/main/native/cpp/rubik_jni.cpp)
+add_library(${PROJECT_NAME} SHARED src/main/native/cpp/rubik_jni.cpp)
 
 target_link_libraries(
     ${PROJECT_NAME}
     PUBLIC
         Threads::Threads
         ${OPENCV_LIB_PATH}
-        ${LIB_PATH}/libtensorflowlite_c.so
-        ${LIB_PATH}/libtensorflowlite.so
-        ${LIB_PATH}/libexternal_delegate.so
+        ${LIB_PATH}/libtensorflowlite.so # C++ API library
+        ${LIB_PATH}/libexternal_delegate.so # External delegate
+        flatbuffers # FlatBuffers library
 )
 
 target_include_directories(
@@ -121,6 +143,13 @@ target_include_directories(
         ${JNI_INCLUDE_DIRS}
         ${OPENCV_INCLUDE_PATH}
         ${TFLITE_INCLUDE_DIR}
+        ${flatbuffers_SOURCE_DIR}/include # Add FlatBuffers include directory
+)
+
+# Add some compiler flags for better error reporting
+target_compile_options(
+    ${PROJECT_NAME}
+    PRIVATE -Wall -Wextra -Wno-unused-parameter
 )
 
 set_target_properties(${PROJECT_NAME} PROPERTIES INSTALL_RPATH "\\\$ORIGIN/")
@@ -129,8 +158,7 @@ include(GNUInstallDirs)
 install(TARGETS ${PROJECT_NAME})
 install(
     FILES
-        ${LIB_PATH}/libtensorflowlite_c.so
-        ${LIB_PATH}/libtensorflowlite.so
+        ${LIB_PATH}/libtensorflowlite.so # Only C++ library needed
         ${LIB_PATH}/libexternal_delegate.so
     TYPE LIB
 )

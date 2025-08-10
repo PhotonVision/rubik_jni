@@ -20,11 +20,12 @@
  */
 
 #include <jni.h>
+#include <tensorflow/lite/delegates/external/external_delegate.h>
 #include <tensorflow/lite/interpreter.h>
 #include <tensorflow/lite/kernels/register.h>
 #include <tensorflow/lite/model.h>
 #include <tensorflow/lite/optional_debug_tools.h>
-#include <tensorflow/lite/delegates/external/external_delegate.h>
+#include <tensorflow/lite/schema/schema_generated.h> // This includes FlatBuffers which is why we use it
 #include <tensorflow/lite/version.h>
 
 #include <algorithm>
@@ -233,7 +234,7 @@ Java_org_photonvision_rubik_RubikJNI_create
   // Build interpreter
   std::unique_ptr<tflite::Interpreter> interpreter;
   tflite::InterpreterBuilder builder(*model, *resolver);
-  
+
   if (builder(&interpreter) != kTfLiteOk || !interpreter) {
     ThrowRuntimeException(env, "Failed to build interpreter");
     env->ReleaseStringUTFChars(modelPath, model_name);
