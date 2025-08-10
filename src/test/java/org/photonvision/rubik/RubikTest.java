@@ -114,7 +114,7 @@ public class RubikTest {
                 System.out.println(param + " property not set or empty; skipping memory leak test.");
                 return false;
             }
-    
+
             try {
                 int numIterations = Integer.parseInt(iterations.trim());
                 return numIterations > 0;
