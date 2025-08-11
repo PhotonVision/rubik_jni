@@ -21,23 +21,19 @@ import org.opencv.core.Point;
 import org.opencv.core.Rect2d;
 
 public class RubikJNI {
-    /**
-     * A class representing the result of a detection.
-     */
+    /** A class representing the result of a detection. */
     public static class RubikResult {
         /**
-         * Create a RubikResult with the specified bounding box coordinates, confidence,
-         * and class ID.
+         * Create a RubikResult with the specified bounding box coordinates, confidence, and class ID.
          *
-         * @param x1       The x coordinate of a vertex of the bounding box.
-         * @param y1       The y coordinate of a vertex of the bounding box.
-         * @param x2       The x coordinate of the opposite vertex of the bounding box.
-         * @param y2       The y coordinate of the opposite vertex of the bounding box.
-         * @param conf     The confidence score of the detection.
+         * @param x1 The x coordinate of a vertex of the bounding box.
+         * @param y1 The y coordinate of a vertex of the bounding box.
+         * @param x2 The x coordinate of the opposite vertex of the bounding box.
+         * @param y2 The y coordinate of the opposite vertex of the bounding box.
+         * @param conf The confidence score of the detection.
          * @param class_id The class ID of the detected object.
          */
-        public RubikResult(
-                int x1, int y1, int x2, int y2, float conf, int class_id) {
+        public RubikResult(int x1, int y1, int x2, int y2, float conf, int class_id) {
             this.conf = conf;
             this.class_id = class_id;
             this.rect = new Rect2d(new Point(x1, y1), new Point(x2, y2));
@@ -64,22 +60,15 @@ public class RubikJNI {
 
         @Override
         public boolean equals(Object obj) {
-            if (this == obj)
-                return true;
-            if (obj == null)
-                return false;
-            if (getClass() != obj.getClass())
-                return false;
+            if (this == obj) return true;
+            if (obj == null) return false;
+            if (getClass() != obj.getClass()) return false;
             RubikResult other = (RubikResult) obj;
             if (rect == null) {
-                if (other.rect != null)
-                    return false;
-            } else if (!rect.equals(other.rect))
-                return false;
-            if (Float.floatToIntBits(conf) != Float.floatToIntBits(other.conf))
-                return false;
-            if (class_id != other.class_id)
-                return false;
+                if (other.rect != null) return false;
+            } else if (!rect.equals(other.rect)) return false;
+            if (Float.floatToIntBits(conf) != Float.floatToIntBits(other.conf)) return false;
+            if (class_id != other.class_id) return false;
             return true;
         }
     }
@@ -106,8 +95,8 @@ public class RubikJNI {
      * @param imagePtr The pointer to the image data.
      * @param boxThresh The threshold for the bounding box detection.
      * @param nmsThreshold The threshold for non-maximum suppression.
-     * @return An array of {@link RubikJNI.RubikResult} objects containing the
-     *         detection results.
+     * @return An array of {@link RubikJNI.RubikResult} objects containing the detection results.
      */
-    public static native RubikResult[] detect(long detectorPtr, long imagePtr, double boxThresh, double nmsThreshold);
+    public static native RubikResult[] detect(
+            long detectorPtr, long imagePtr, double boxThresh, double nmsThreshold);
 }
