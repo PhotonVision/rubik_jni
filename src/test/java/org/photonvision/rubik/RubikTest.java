@@ -17,6 +17,7 @@
 
 package org.photonvision.rubik;
 
+import edu.wpi.first.util.CombinedRuntimeLoader;
 import java.io.IOException;
 import java.util.Arrays;
 import org.junit.jupiter.api.Test;
@@ -27,7 +28,6 @@ import org.opencv.core.Scalar;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
 import org.photonvision.rubik.RubikJNI.RubikResult;
-import edu.wpi.first.util.CombinedRuntimeLoader;
 
 public class RubikTest {
     @Test
@@ -57,10 +57,9 @@ public class RubikTest {
         System.out.println("Creating Rubik detector");
         long ptr = RubikJNI.create("src/test/resources/yolov8nCoco.tflite");
 
-            if (ptr == 0) {
-                throw new RuntimeException("Failed to create Rubik detector");
-            }
-
+        if (ptr == 0) {
+            throw new RuntimeException("Failed to create Rubik detector");
+        }
 
         System.out.println("Rubik detector created: " + ptr);
         RubikResult[] ret = RubikJNI.detect(ptr, img.getNativeObjAddr(), 0.5f, 0.45f);
@@ -75,7 +74,7 @@ public class RubikTest {
 
             Scalar color = new Scalar(0, 255, 0); // Green color is default for bounding box
 
-            if(result.class_id == 0) {
+            if (result.class_id == 0) {
                 color = new Scalar(255, 0, 0); // Blue for person
             } else if (result.class_id == 5) {
                 color = new Scalar(0, 0, 255); // Red for bus
@@ -83,12 +82,12 @@ public class RubikTest {
 
             // Draw bounding box on the image
             Imgproc.rectangle(
-                img,
-                new Point(result.rect.x, result.rect.y),
-                new Point(result.rect.x + result.rect.width, result.rect.y + result.rect.height),
-                color,
-                2 // Thickness
-            );
+                    img,
+                    new Point(result.rect.x, result.rect.y),
+                    new Point(result.rect.x + result.rect.width, result.rect.y + result.rect.height),
+                    color,
+                    2 // Thickness
+                    );
 
             // Put label text
             // Imgproc.putText(
@@ -107,30 +106,31 @@ public class RubikTest {
         System.out.println("Results written to image and saved as bus_with_results.jpg");
     }
 
-        // Helper method to determine if the memory leak test should be enabled
-        static boolean isIterationTestEnabled(String param) {
-            String iterations = System.getProperty(param);
-            if (iterations == null || iterations.trim().isEmpty()) {
-                System.out.println(param + " property not set or empty; skipping memory leak test.");
-                return false;
-            }
-
-            try {
-                int numIterations = Integer.parseInt(iterations.trim());
-                return numIterations > 0;
-            } catch (NumberFormatException e) {
-                return false;
-            }
+    // Helper method to determine if the memory leak test should be enabled
+    static boolean isIterationTestEnabled(String param) {
+        String iterations = System.getProperty(param);
+        if (iterations == null || iterations.trim().isEmpty()) {
+            System.out.println(param + " property not set or empty; skipping memory leak test.");
+            return false;
         }
+
+        try {
+            int numIterations = Integer.parseInt(iterations.trim());
+            return numIterations > 0;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
 
     static boolean memLeakEnabled() {
         return isIterationTestEnabled("memLeakTestIterations");
     }
 
     /**
-     * This test will create and destroy a Rubik detector repeatedly to try and cause memory leaks.
-     * To find a memory leak, it's necessary to manually watch memory as this test runs, as the test itself does not check memory.
-     * It can be enabled by setting the number of iterations, using the system property "memLeakTestIterations".
+     * This test will create and destroy a Rubik detector repeatedly to try and cause memory leaks. To
+     * find a memory leak, it's necessary to manually watch memory as this test runs, as the test
+     * itself does not check memory. It can be enabled by setting the number of iterations, using the
+     * system property "memLeakTestIterations".
      */
     @Test
     @org.junit.jupiter.api.condition.EnabledIf("memLeakEnabled")
@@ -151,7 +151,7 @@ public class RubikTest {
         int numRuns = Integer.parseInt(System.getProperty("memLeakTestIterations"));
 
         System.out.println("Starting memory leak finder test; running for " + numRuns + " iterations");
-        for( int i = 0; i < numRuns; i++) {
+        for (int i = 0; i < numRuns; i++) {
             if (i % 1000 == 0) {
                 System.out.println("Iteration " + i);
             }
@@ -171,12 +171,12 @@ public class RubikTest {
     }
 
     /**
-     * This test will run the detect function repeatedly to benchmark performance.
-     * It can be enabled by setting the number of iterations, using the system property "benchmarkIterations".
+     * This test will run the detect function repeatedly to benchmark performance. It can be enabled
+     * by setting the number of iterations, using the system property "benchmarkIterations".
      */
     @Test
     @org.junit.jupiter.api.condition.EnabledIf("benchmarkEnabled")
-    public void benchmark(){
+    public void benchmark() {
         System.out.println("Running benchmark test");
         try {
             CombinedRuntimeLoader.loadLibraries(RubikTest.class, Core.NATIVE_LIBRARY_NAME);
@@ -203,16 +203,16 @@ public class RubikTest {
         System.out.println("Creating Rubik detector");
         long ptr = RubikJNI.create("src/test/resources/yolov8nCoco.tflite");
 
-            if (ptr == 0) {
-                throw new RuntimeException("Failed to create Rubik detector");
-            }
+        if (ptr == 0) {
+            throw new RuntimeException("Failed to create Rubik detector");
+        }
 
         int numRuns = Integer.parseInt(System.getProperty("benchmarkIterations"));
         System.out.println("Starting benchmark; running for " + numRuns + " iterations");
 
         long startTime = System.nanoTime();
 
-        for( int i = 0; i < numRuns; i++) {
+        for (int i = 0; i < numRuns; i++) {
             RubikResult[] ret = RubikJNI.detect(ptr, img.getNativeObjAddr(), 0.5f, 0.45f);
         }
 
@@ -220,7 +220,9 @@ public class RubikTest {
         long duration = endTime - startTime; // Duration in nanoseconds
         double avgDurationMs = (duration / 1_000_000.0) / numRuns; // Average duration in milliseconds
 
-        System.out.printf("Benchmark complete. Average detection time: %.2f ms over %d runs.%n", avgDurationMs, numRuns);
+        System.out.printf(
+                "Benchmark complete. Average detection time: %.2f ms over %d runs.%n",
+                avgDurationMs, numRuns);
 
         System.out.println("Releasing Rubik detector");
         RubikJNI.destroy(ptr);
