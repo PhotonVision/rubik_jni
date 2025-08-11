@@ -26,3 +26,11 @@ Build and run repeated iterations of creating and destroying a detector to find 
 ```
 ./gradlew build -PmemLeakTestIterations=1000
 ```
+
+## Benchmark
+
+Run the detect function repeatedly to benchmark performance.
+
+```
+./gradlew build -PbenchmarkIterations=1000
+```
