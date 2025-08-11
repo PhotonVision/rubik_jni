@@ -469,15 +469,18 @@ Java_org_photonvision_rubik_RubikJNI_detect
 
   std::memcpy(TfLiteTensorData(input), rgb.data, TfLiteTensorByteSize(input));
 
-  // Start timer for benchmark
+// Start timer for benchmark
+#ifndef NDEBUG
   struct timespec start, end;
   clock_gettime(CLOCK_MONOTONIC, &start); // Start timing
+#endif
 
   if (TfLiteInterpreterInvoke(interpreter) != kTfLiteOk) {
     ThrowRuntimeException(env, "Interpreter invocation failed");
     return nullptr;
   }
 
+#ifndef NDEBUG
   clock_gettime(CLOCK_MONOTONIC, &end); // End timing
 
   // Calculate elapsed time in milliseconds
@@ -485,6 +488,7 @@ Java_org_photonvision_rubik_RubikJNI_detect
                         (end.tv_nsec - start.tv_nsec) / 1000000.0;
 
   DEBUG_PRINT("INFO: Model execution time: %.2f ms\n", elapsed_time);
+#endif
 
   const TfLiteTensor *boxesTensor =
       TfLiteInterpreterGetOutputTensor(interpreter, 0);
