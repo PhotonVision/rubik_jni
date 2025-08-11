@@ -97,7 +97,8 @@ public class RubikJNI {
      * @param nmsThreshold The threshold for non-maximum suppression.
      * @return An array of {@link RubikJNI.RubikResult} objects containing the detection results.
      */
-    public static native RubikResult[] detect(long detectorPtr, long imagePtr, double boxThresh, double nmsThreshold);
+    public static native RubikResult[] detect(
+            long detectorPtr, long imagePtr, double boxThresh, double nmsThreshold);
 
     /**
      * Check model quantization.

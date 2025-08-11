@@ -18,6 +18,7 @@
 package org.photonvision.rubik;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import edu.wpi.first.util.CombinedRuntimeLoader;
 import java.io.IOException;
 import java.util.Arrays;
