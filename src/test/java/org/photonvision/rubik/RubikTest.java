@@ -17,6 +17,7 @@
 
 package org.photonvision.rubik;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import edu.wpi.first.util.CombinedRuntimeLoader;
@@ -231,5 +232,25 @@ public class RubikTest {
 
         System.out.println("Releasing Rubik detector");
         RubikJNI.destroy(ptr);
+    }
+
+    private boolean checkQuant(String modelPath) {
+        long ptr = RubikJNI.create(modelPath);
+
+        if (ptr <= 0) {
+            throw new RuntimeException("Failed to create Rubik detector");
+        }
+
+        boolean isQuantized = RubikJNI.isQuantized(ptr);
+
+        RubikJNI.destroy(ptr);
+
+        return isQuantized;
+    }
+
+    @Test
+    public void testQuantizationCheck() {
+        assertTrue(checkQuant("src/test/resources/yolov8nCoco.tflite"));
+        assertFalse(checkQuant("src/test/resources/yolov8nCocoNoQuant.tflite"));
     }
 }
