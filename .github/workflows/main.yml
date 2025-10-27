@@ -62,9 +62,9 @@ jobs:
 
     - run: find .
 
-# TODO: change publish back to this before merging ${{ (startsWith(github.event_name, 'push') && 'publish') || '' }}
+      
     - run: |
-        ./gradlew build publish -PArchOverride=linuxarm64 -PPublishType=${{ matrix.publish-type }} -x check
+        ./gradlew build ${{ (startsWith(github.event_name, 'push') && 'publish') || '' }} -PArchOverride=linuxarm64 -PPublishType=${{ matrix.publish-type }} -x check
       env:
         ARTIFACTORY_API_KEY: ${{ secrets.ARTIFACTORY_API_KEY }}
 
