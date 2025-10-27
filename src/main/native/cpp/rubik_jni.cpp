@@ -588,6 +588,12 @@ Java_org_photonvision_rubik_RubikJNI_detect
     float height = get_dequant_value(&raw_height_u8, kTfLiteUInt8, 0,
                                      boxesParams.zero_point, boxesParams.scale);
 
+    // Scale normalized coordinates to pixel coordinates
+    x_center *= input_img->cols;
+    y_center *= input_img->rows;
+    width *= input_img->cols;
+    height *= input_img->rows;
+
     // Calculate corners
     float x1 = x_center;
     float y1 = y_center;
