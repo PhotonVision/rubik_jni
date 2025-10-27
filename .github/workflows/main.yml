@@ -62,7 +62,7 @@ jobs:
 
     - run: find .
 
-      
+
     - run: |
         ./gradlew build ${{ (startsWith(github.event_name, 'push') && 'publish') || '' }} -PArchOverride=linuxarm64 -PPublishType=${{ matrix.publish-type }} -x check
       env:
