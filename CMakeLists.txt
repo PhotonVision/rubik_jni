@@ -36,24 +36,22 @@ set(OPENCV_TYPE "")
 
 # Download opencv, and save the path
 include(FetchContent)
-fetchcontent_declare(
+FetchContent_Declare(
     opencv_lib
     URL
         https://frcmaven.wpi.edu/artifactory/release/edu/wpi/first/thirdparty/${OPENCV_YEAR}/opencv/opencv-cpp/${OPENCV_VERSION}/opencv-cpp-${OPENCV_VERSION}-${OPENCV_ARCH}${OPENCV_TYPE}.zip
-        DOWNLOAD_EXTRACT_TIMESTAMP
-        TRUE
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
-fetchcontent_makeavailable(opencv_lib)
+FetchContent_MakeAvailable(opencv_lib)
 
 # download OpenCV headers
-fetchcontent_declare(
+FetchContent_Declare(
     opencv_header
     URL
         https://frcmaven.wpi.edu/artifactory/release/edu/wpi/first/thirdparty/${OPENCV_YEAR}/opencv/opencv-cpp/${OPENCV_VERSION}/opencv-cpp-${OPENCV_VERSION}-headers.zip
-        DOWNLOAD_EXTRACT_TIMESTAMP
-        TRUE
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
-fetchcontent_makeavailable(opencv_header)
+FetchContent_MakeAvailable(opencv_header)
 
 # This probably doesn't work great with shared libraries, but I don't care about those right now
 file(
@@ -66,14 +64,12 @@ message("Depending on opencv ${OPENCV_LIB_PATH}")
 
 # Download TensorFlow Lite headers
 include(FetchContent)
-fetchcontent_declare(
+FetchContent_Declare(
     tflite_header
-    URL
-        https://github.com/tensorflow/tensorflow/archive/refs/tags/v2.19.0.zip
-        DOWNLOAD_EXTRACT_TIMESTAMP
-        TRUE
+    URL https://github.com/tensorflow/tensorflow/archive/refs/tags/v2.19.0.zip
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
-fetchcontent_makeavailable(tflite_header)
+FetchContent_MakeAvailable(tflite_header)
 
 # Set TensorFlow Lite headers
 set(TFLITE_INCLUDE_DIR
