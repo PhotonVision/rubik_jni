@@ -577,15 +577,14 @@ Java_org_photonvision_rubik_RubikJNI_detect
     uint8_t raw_y_2_u8 = boxesData[i * 4 + 3];
 
     // Use proper dequantization for bbox coordinates (like we do for scores)
-    float x1 =
-        get_dequant_value(&raw_x_1_u8, kTfLiteUInt8, 0,
-                          boxesParams.zero_point, boxesParams.scale);
+    float x1 = get_dequant_value(&raw_x_1_u8, kTfLiteUInt8, 0,
+                                 boxesParams.zero_point, boxesParams.scale);
     float y1 = get_dequant_value(&raw_y_1_u8, kTfLiteUInt8, 0,
-                          boxesParams.zero_point, boxesParams.scale);
+                                 boxesParams.zero_point, boxesParams.scale);
     float x2 = get_dequant_value(&raw_x_2_u8, kTfLiteUInt8, 0,
-                                    boxesParams.zero_point, boxesParams.scale);
+                                 boxesParams.zero_point, boxesParams.scale);
     float y2 = get_dequant_value(&raw_y_2_u8, kTfLiteUInt8, 0,
-                                     boxesParams.zero_point, boxesParams.scale);
+                                 boxesParams.zero_point, boxesParams.scale);
 
     float clamped_x1 =
         std::max(0.0f, std::min(x1, static_cast<float>(input_img->cols)));
