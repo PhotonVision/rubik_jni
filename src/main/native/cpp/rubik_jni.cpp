@@ -571,28 +571,20 @@ Java_org_photonvision_rubik_RubikJNI_detect
     int classId = classesData[i];
 
     // For tensor shape [1, 8400, 4], use sequential indexing per detection
-    uint8_t raw_x_center_u8 = boxesData[i * 4 + 0];
-    uint8_t raw_y_center_u8 = boxesData[i * 4 + 1];
-    uint8_t raw_width_u8 = boxesData[i * 4 + 2];
-    uint8_t raw_height_u8 = boxesData[i * 4 + 3];
+    uint8_t raw_x_1_u8 = boxesData[i * 4 + 0];
+    uint8_t raw_y_1_u8 = boxesData[i * 4 + 1];
+    uint8_t raw_x_2_u8 = boxesData[i * 4 + 2];
+    uint8_t raw_y_2_u8 = boxesData[i * 4 + 3];
 
     // Use proper dequantization for bbox coordinates (like we do for scores)
-    float x_center =
-        get_dequant_value(&raw_x_center_u8, kTfLiteUInt8, 0,
-                          boxesParams.zero_point, boxesParams.scale);
-    float y_center =
-        get_dequant_value(&raw_y_center_u8, kTfLiteUInt8, 0,
-                          boxesParams.zero_point, boxesParams.scale);
-    float width = get_dequant_value(&raw_width_u8, kTfLiteUInt8, 0,
-                                    boxesParams.zero_point, boxesParams.scale);
-    float height = get_dequant_value(&raw_height_u8, kTfLiteUInt8, 0,
-                                     boxesParams.zero_point, boxesParams.scale);
-
-    // Calculate corners
-    float x1 = x_center;
-    float y1 = y_center;
-    float x2 = x_center + (width / 2.0f);
-    float y2 = y_center + (height / 2.0f);
+    float x1 = get_dequant_value(&raw_x_1_u8, kTfLiteUInt8, 0,
+                                 boxesParams.zero_point, boxesParams.scale);
+    float y1 = get_dequant_value(&raw_y_1_u8, kTfLiteUInt8, 0,
+                                 boxesParams.zero_point, boxesParams.scale);
+    float x2 = get_dequant_value(&raw_x_2_u8, kTfLiteUInt8, 0,
+                                 boxesParams.zero_point, boxesParams.scale);
+    float y2 = get_dequant_value(&raw_y_2_u8, kTfLiteUInt8, 0,
+                                 boxesParams.zero_point, boxesParams.scale);
 
     float clamped_x1 =
         std::max(0.0f, std::min(x1, static_cast<float>(input_img->cols)));
@@ -610,14 +602,11 @@ Java_org_photonvision_rubik_RubikJNI_detect
 
 #ifndef NDEBUG
     if (candidateResults.size() < 5) {
-      std::printf(" DEBUG: box %d - uint8: center(%d, %d) size(%d, %d)\n", i,
-                  raw_x_center_u8, raw_y_center_u8, raw_width_u8,
-                  raw_height_u8);
+      std::printf(" DEBUG: box %d - uint8 corners: (%d, %d) to (%d, %d)\n", i,
+                  raw_x_1_u8, raw_y_1_u8, raw_x_2_u8, raw_y_2_u8);
       std::printf(
-          "DEBUG: box %d - dequantized: center(%.2f, %.2f) size(%.2f, %.2f)\n",
-          i, x_center, y_center, width, height);
-      std::printf("DEBUG: box %d - corners: (%.2f, %.2f) to (%.2f, %.2f)\n", i,
-                  x1, y1, x2, y2);
+          "DEBUG: box %d - dequantized corners: (%.2f, %.2f) to (%.2f, %.2f)\n",
+          i, x1, y1, x2, y2);
       std::printf(
           "DEBUG: box %d - clamped corners: (%.2f, %.2f) to (%.2f, %.2f), "
           "score=%.3f, class=%d\n",
