@@ -18,7 +18,8 @@
 package org.photonvision.rubik;
 
 import org.opencv.core.Point;
-import org.opencv.core.Rect2d;
+import org.opencv.core.RotatedRect;
+import org.opencv.core.Size;
 
 public class RubikJNI {
     /** A class representing the result of a detection. */
@@ -26,20 +27,22 @@ public class RubikJNI {
         /**
          * Create a RubikResult with the specified bounding box coordinates, confidence, and class ID.
          *
-         * @param x1 The x coordinate of a vertex of the bounding box.
-         * @param y1 The y coordinate of a vertex of the bounding box.
-         * @param x2 The x coordinate of the opposite vertex of the bounding box.
-         * @param y2 The y coordinate of the opposite vertex of the bounding box.
-         * @param conf The confidence score of the detection.
-         * @param class_id The class ID of the detected object.
+         * @param cx Center x-coordinate of the bounding box
+         * @param cy Center y-coordinate of the bounding box
+         * @param height Height of the bounding box
+         * @param width Width of the bounding box
+         * @param angle Rotation angle of the bounding box
+         * @param conf Confidence score of the detection
+         * @param class_id Class ID of the detected object
          */
-        public RubikResult(int x1, int y1, int x2, int y2, float conf, int class_id) {
+        public RubikResult(
+                int cx, int cy, int height, int width, double angle, float conf, int class_id) {
             this.conf = conf;
             this.class_id = class_id;
-            this.rect = new Rect2d(new Point(x1, y1), new Point(x2, y2));
+            this.rect = new RotatedRect(new Point(cx, cy), new Size(width, height), angle);
         }
 
-        public final Rect2d rect;
+        public final RotatedRect rect;
         public final float conf;
         public final int class_id;
 

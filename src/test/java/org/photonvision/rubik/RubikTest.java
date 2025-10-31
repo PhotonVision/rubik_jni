@@ -85,14 +85,21 @@ public class RubikTest {
                 color = new Scalar(0, 0, 255); // Red for bus
             }
 
+            double cx = result.rect.center.x;
+            double cy = result.rect.center.y;
+            double halfWidth = result.rect.size.width / 2.0;
+            double halfHeight = result.rect.size.height / 2.0;
+
+            Point p1 = new Point(cx - halfWidth, cy - halfHeight); // top-left
+            Point p2 = new Point(cx + halfWidth, cy - halfHeight); // top-right
+            Point p3 = new Point(cx + halfWidth, cy + halfHeight); // bottom-right
+            Point p4 = new Point(cx - halfWidth, cy + halfHeight); // bottom-left
+
             // Draw bounding box on the image
-            Imgproc.rectangle(
-                    img,
-                    new Point(result.rect.x, result.rect.y),
-                    new Point(result.rect.x + result.rect.width, result.rect.y + result.rect.height),
-                    color,
-                    2 // Thickness
-                    );
+            Imgproc.line(img, p1, p2, color, 2);
+            Imgproc.line(img, p2, p3, color, 2);
+            Imgproc.line(img, p3, p4, color, 2);
+            Imgproc.line(img, p4, p1, color, 2);
 
             // Put label text
             // Imgproc.putText(

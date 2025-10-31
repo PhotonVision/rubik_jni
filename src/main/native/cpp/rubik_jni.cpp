@@ -46,10 +46,11 @@
 #endif
 
 typedef struct _BOX_RECT {
-  int left;
-  int right;
-  int top;
-  int bottom;
+  int centerX;
+  int centerY;
+  int width;
+  int height;
+  double angle;
 } BOX_RECT;
 
 typedef struct RubikDetector {
@@ -179,15 +180,15 @@ static jobject MakeJObject(JNIEnv *env, const detect_result_t &result) {
   }
 
   jmethodID constructor =
-      env->GetMethodID(detectionResultClass, "<init>", "(IIIIFI)V");
+      env->GetMethodID(detectionResultClass, "<init>", "(IIIIDFI)V");
   if (!constructor) {
     std::printf("ERROR: Could not find constructor for RubikResult!\n");
     return nullptr;
   }
 
-  return env->NewObject(detectionResultClass, constructor, result.box.left,
-                        result.box.top, result.box.right, result.box.bottom,
-                        result.obj_conf, result.id);
+  return env->NewObject(detectionResultClass, constructor, result.box.centerX,
+                        result.box.centerY, result.box.width, result.box.height,
+                        result.box.angle, result.obj_conf, result.id);
 }
 
 // Helper function to throw exceptions
@@ -359,19 +360,32 @@ Java_org_photonvision_rubik_RubikJNI_destroy
 
 inline float calculateIoU(const BOX_RECT &box1, const BOX_RECT &box2) {
   // Calculate intersection coordinates
-  const int x1 = std::max(box1.left, box2.left);
-  const int y1 = std::max(box1.top, box2.top);
-  const int x2 = std::min(box1.right, box2.right);
-  const int y2 = std::min(box1.bottom, box2.bottom);
+  // Convert from (centerX, centerY, width, height) to (left, top, right,
+  // bottom)
+  float left1 = box1.centerX - box1.width / 2.0f;
+  float top1 = box1.centerY - box1.height / 2.0f;
+  float right1 = box1.centerX + box1.width / 2.0f;
+  float bottom1 = box1.centerY + box1.height / 2.0f;
+
+  float left2 = box2.centerX - box2.width / 2.0f;
+  float top2 = box2.centerY - box2.height / 2.0f;
+  float right2 = box2.centerX + box2.width / 2.0f;
+  float bottom2 = box2.centerY + box2.height / 2.0f;
+
+  // Intersection coordinates
+  float x1 = std::max(left1, left2);
+  float y1 = std::max(top1, top2);
+  float x2 = std::min(right1, right2);
+  float y2 = std::min(bottom1, bottom2);
 
   // No intersection case
   if (x2 <= x1 || y2 <= y1)
     return 0.0f;
 
-  // Calculate areas using pre-computed values when possible
-  const int intersectionArea = (x2 - x1) * (y2 - y1);
-  const int area1 = (box1.right - box1.left) * (box1.bottom - box1.top);
-  const int area2 = (box2.right - box2.left) * (box2.bottom - box2.top);
+  // Areas
+  float intersectionArea = (x2 - x1) * (y2 - y1);
+  float area1 = (right1 - left1) * (bottom1 - top1);
+  float area2 = (right2 - left2) * (bottom2 - top2);
 
   return static_cast<float>(intersectionArea) /
          (area1 + area2 - intersectionArea);
@@ -600,6 +614,11 @@ Java_org_photonvision_rubik_RubikJNI_detect
       continue;
     }
 
+    float centerX = (clamped_x1 + clamped_x2) / 2.0f;
+    float centerY = (clamped_y1 + clamped_y2) / 2.0f;
+    float width = clamped_x2 - clamped_x1;
+    float height = clamped_y2 - clamped_y1;
+
 #ifndef NDEBUG
     if (candidateResults.size() < 5) {
       std::printf(" DEBUG: box %d - uint8 corners: (%d, %d) to (%d, %d)\n", i,
@@ -611,14 +630,18 @@ Java_org_photonvision_rubik_RubikJNI_detect
           "DEBUG: box %d - clamped corners: (%.2f, %.2f) to (%.2f, %.2f), "
           "score=%.3f, class=%d\n",
           i, clamped_x1, clamped_y1, clamped_x2, clamped_y2, score, classId);
+      std::printf(
+          "DEBUG: box %d - center=(%.2f, %.2f), width=%.2f, height=%.2f\n", i,
+          centerX, centerY, width, height);
     }
 #endif
 
     detect_result_t det;
-    det.box.left = static_cast<int>(std::round(clamped_x1));
-    det.box.top = static_cast<int>(std::round(clamped_y1));
-    det.box.right = static_cast<int>(std::round(clamped_x2));
-    det.box.bottom = static_cast<int>(std::round(clamped_y2));
+    det.box.centerX = static_cast<int>(std::round(centerX));
+    det.box.centerY = static_cast<int>(std::round(centerY));
+    det.box.width = static_cast<int>(std::round(width));
+    det.box.height = static_cast<int>(std::round(height));
+    det.box.angle = 0.0; // Angle is not predicted by the typical yolo model
     det.obj_conf = score;
     det.id = classId;
 
