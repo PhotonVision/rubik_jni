@@ -57,6 +57,7 @@ typedef struct RubikDetector {
   TfLiteInterpreter *interpreter;
   TfLiteDelegate *delegate;
   TfLiteModel *model;
+  int version;
 } RubikDetector;
 
 typedef struct __detect_result_t {
@@ -205,11 +206,18 @@ void ThrowRuntimeException(JNIEnv *env, const char *message) {
  */
 JNIEXPORT jlong JNICALL
 Java_org_photonvision_rubik_RubikJNI_create
-  (JNIEnv *env, jobject obj, jstring modelPath)
+  (JNIEnv *env, jobject obj, jstring modelPath, jint version)
 {
   const char *model_name = env->GetStringUTFChars(modelPath, nullptr);
   if (model_name == nullptr) {
     ThrowRuntimeException(env, "Failed to retrieve model path");
+    return 0;
+  }
+
+  const int model_version = static_cast<int>(version);
+  if (model_version < 0 || model_version > 2) {
+    ThrowRuntimeException(env, "Unsupported YOLO version specified");
+    env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
   }
 
@@ -319,6 +327,7 @@ Java_org_photonvision_rubik_RubikJNI_create
   detector->interpreter = interpreter;
   detector->delegate = delegate;
   detector->model = model;
+  detector->version = model_version;
 
   // Convert RubikDetector pointer to jlong
   jlong ptr = reinterpret_cast<jlong>(detector);
@@ -351,6 +360,7 @@ Java_org_photonvision_rubik_RubikJNI_destroy
     TfLiteExternalDelegateDelete(detector->delegate);
   if (detector->model)
     TfLiteModelDelete(detector->model);
+  // We don't need to delete the version since it's just an int not a pointer
 
   // Delete the RubikDetector object
   delete detector;
