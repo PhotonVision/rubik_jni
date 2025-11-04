@@ -359,36 +359,57 @@ Java_org_photonvision_rubik_RubikJNI_destroy
 }
 
 inline float calculateIoU(const BOX_RECT &box1, const BOX_RECT &box2) {
-  // Calculate intersection coordinates
-  // Convert from (centerX, centerY, width, height) to (left, top, right,
-  // bottom)
-  float left1 = box1.centerX - box1.width / 2.0f;
-  float top1 = box1.centerY - box1.height / 2.0f;
-  float right1 = box1.centerX + box1.width / 2.0f;
-  float bottom1 = box1.centerY + box1.height / 2.0f;
+  // Convert to floats
+  float cx1 = static_cast<float>(box1.centerX);
+  float cy1 = static_cast<float>(box1.centerY);
+  float w1 = static_cast<float>(box1.width);
+  float h1 = static_cast<float>(box1.height);
+  float a1 = static_cast<float>(box1.angle); // assume degrees (OpenCV uses degrees)
 
-  float left2 = box2.centerX - box2.width / 2.0f;
-  float top2 = box2.centerY - box2.height / 2.0f;
-  float right2 = box2.centerX + box2.width / 2.0f;
-  float bottom2 = box2.centerY + box2.height / 2.0f;
+  float cx2 = static_cast<float>(box2.centerX);
+  float cy2 = static_cast<float>(box2.centerY);
+  float w2 = static_cast<float>(box2.width);
+  float h2 = static_cast<float>(box2.height);
+  float a2 = static_cast<float>(box2.angle);
 
-  // Intersection coordinates
-  float x1 = std::max(left1, left2);
-  float y1 = std::max(top1, top2);
-  float x2 = std::min(right1, right2);
-  float y2 = std::min(bottom1, bottom2);
-
-  // No intersection case
-  if (x2 <= x1 || y2 <= y1)
+  // Validate sizes
+  if (w1 <= 0.0f || h1 <= 0.0f || w2 <= 0.0f || h2 <= 0.0f)
     return 0.0f;
 
-  // Areas
-  float intersectionArea = (x2 - x1) * (y2 - y1);
-  float area1 = (right1 - left1) * (bottom1 - top1);
-  float area2 = (right2 - left2) * (bottom2 - top2);
+  // Create OpenCV RotatedRect (center, size, angle_in_degrees)
+  cv::RotatedRect r1(cv::Point2f(cx1, cy1), cv::Size2f(w1, h1), a1);
+  cv::RotatedRect r2(cv::Point2f(cx2, cy2), cv::Size2f(w2, h2), a2);
 
-  return static_cast<float>(intersectionArea) /
-         (area1 + area2 - intersectionArea);
+  // Compute intersection polygon
+  std::vector<cv::Point2f> interPts;
+  int ret = cv::rotatedRectangleIntersection(r1, r2, interPts);
+
+  if (ret == cv::INTERSECT_NONE)
+    return 0.0f;
+
+  // Areas of rectangles
+  float area1 = w1 * h1;
+  float area2 = w2 * h2;
+
+  // Intersection area
+  double intersectionArea = 0.0;
+  if (!interPts.empty()) {
+    intersectionArea = std::fabs(cv::contourArea(interPts));
+  } else {
+    // If OpenCV didn't return polygon points but indicates full intersection,
+    // fallback to min(area1, area2)
+    if (ret == cv::INTERSECT_FULL) {
+      intersectionArea = static_cast<double>(std::min(area1, area2));
+    } else {
+      intersectionArea = 0.0;
+    }
+  }
+
+  double unionArea = static_cast<double>(area1 + area2) - intersectionArea;
+  if (unionArea <= 0.0)
+    return 0.0f;
+
+  return static_cast<float>(intersectionArea / unionArea);
 }
 
 std::vector<detect_result_t>
