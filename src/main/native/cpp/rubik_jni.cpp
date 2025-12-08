@@ -56,6 +56,7 @@ typedef struct RubikDetector {
   TfLiteInterpreter *interpreter;
   TfLiteDelegate *delegate;
   TfLiteModel *model;
+  int version;
 } RubikDetector;
 
 typedef struct __detect_result_t {
@@ -200,15 +201,23 @@ void ThrowRuntimeException(JNIEnv *env, const char *message) {
 /*
  * Class:     org_photonvision_rubik_RubikJNI
  * Method:    create
- * Signature: (Ljava/lang/String;)J
+ * Signature: (Ljava/lang/String;I)J
  */
 JNIEXPORT jlong JNICALL
 Java_org_photonvision_rubik_RubikJNI_create
-  (JNIEnv *env, jobject obj, jstring modelPath)
+  (JNIEnv *env, jobject obj, jstring modelPath, jint version)
 {
   const char *model_name = env->GetStringUTFChars(modelPath, nullptr);
   if (model_name == nullptr) {
     ThrowRuntimeException(env, "Failed to retrieve model path");
+    return 0;
+  }
+
+  const int model_version = static_cast<int>(version);
+  // TODO: support 3 (obb) once that's merged in
+  if (model_version < 1 || model_version > 4 || model_version == 3) {
+    ThrowRuntimeException(env, "Unsupported YOLO version specified");
+    env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
   }
 
@@ -318,6 +327,7 @@ Java_org_photonvision_rubik_RubikJNI_create
   detector->interpreter = interpreter;
   detector->delegate = delegate;
   detector->model = model;
+  detector->version = model_version;
 
   // Convert RubikDetector pointer to jlong
   jlong ptr = reinterpret_cast<jlong>(detector);
@@ -350,6 +360,7 @@ Java_org_photonvision_rubik_RubikJNI_destroy
     TfLiteExternalDelegateDelete(detector->delegate);
   if (detector->model)
     TfLiteModelDelete(detector->model);
+  // We don't need to delete the version since it's just an int not a pointer
 
   // Delete the RubikDetector object
   delete detector;
@@ -433,6 +444,8 @@ Java_org_photonvision_rubik_RubikJNI_detect
     ThrowRuntimeException(env, "Invalid RubikDetector pointer");
     return nullptr;
   }
+
+  int version = detector->version;
 
   if (!detector->interpreter) {
     ThrowRuntimeException(env, "Interpreter not initialized");
@@ -570,21 +583,49 @@ Java_org_photonvision_rubik_RubikJNI_detect
 
     int classId = classesData[i];
 
-    // For tensor shape [1, 8400, 4], use sequential indexing per detection
-    uint8_t raw_x_1_u8 = boxesData[i * 4 + 0];
-    uint8_t raw_y_1_u8 = boxesData[i * 4 + 1];
-    uint8_t raw_x_2_u8 = boxesData[i * 4 + 2];
-    uint8_t raw_y_2_u8 = boxesData[i * 4 + 3];
+    float x1, y1, x2, y2;
 
-    // Use proper dequantization for bbox coordinates (like we do for scores)
-    float x1 = get_dequant_value(&raw_x_1_u8, kTfLiteUInt8, 0,
-                                 boxesParams.zero_point, boxesParams.scale);
-    float y1 = get_dequant_value(&raw_y_1_u8, kTfLiteUInt8, 0,
-                                 boxesParams.zero_point, boxesParams.scale);
-    float x2 = get_dequant_value(&raw_x_2_u8, kTfLiteUInt8, 0,
-                                 boxesParams.zero_point, boxesParams.scale);
-    float y2 = get_dequant_value(&raw_y_2_u8, kTfLiteUInt8, 0,
-                                 boxesParams.zero_point, boxesParams.scale);
+    if (version == 1 || version == 2) {
+      // For tensor shape [1, 8400, 4], use sequential indexing per detection
+      uint8_t raw_x_1_u8 = boxesData[i * 4 + 0];
+      uint8_t raw_y_1_u8 = boxesData[i * 4 + 1];
+      uint8_t raw_x_2_u8 = boxesData[i * 4 + 2];
+      uint8_t raw_y_2_u8 = boxesData[i * 4 + 3];
+
+      // Use proper dequantization for bbox coordinates (like we do for scores)
+      x1 = get_dequant_value(&raw_x_1_u8, kTfLiteUInt8, 0,
+                             boxesParams.zero_point, boxesParams.scale);
+      y1 = get_dequant_value(&raw_y_1_u8, kTfLiteUInt8, 0,
+                             boxesParams.zero_point, boxesParams.scale);
+      x2 = get_dequant_value(&raw_x_2_u8, kTfLiteUInt8, 0,
+                             boxesParams.zero_point, boxesParams.scale);
+      y2 = get_dequant_value(&raw_y_2_u8, kTfLiteUInt8, 0,
+                             boxesParams.zero_point, boxesParams.scale);
+    } else if (version == 4) {
+      // For tensor shape [1, 8400, 4], use sequential indexing per detection
+      uint8_t raw_x_u8 = boxesData[i * 4 + 0];
+      uint8_t raw_y_u8 = boxesData[i * 4 + 1];
+      uint8_t raw_w_u8 = boxesData[i * 4 + 2];
+      uint8_t raw_h_u8 = boxesData[i * 4 + 3];
+
+      // Use proper dequantization for bbox coordinates (like we do for scores)
+      float x = get_dequant_value(&raw_x_u8, kTfLiteUInt8, 0,
+                                  boxesParams.zero_point, boxesParams.scale);
+      float y = get_dequant_value(&raw_y_u8, kTfLiteUInt8, 0,
+                                  boxesParams.zero_point, boxesParams.scale);
+      float w = get_dequant_value(&raw_w_u8, kTfLiteUInt8, 0,
+                                  boxesParams.zero_point, boxesParams.scale);
+      float h = get_dequant_value(&raw_h_u8, kTfLiteUInt8, 0,
+                                  boxesParams.zero_point, boxesParams.scale);
+
+      x1 = x - w / 2.0f;
+      y1 = y - h / 2.0f;
+      x2 = x + w / 2.0f;
+      y2 = y + h / 2.0f;
+    } else {
+      ThrowRuntimeException(env, "Unsupported YOLO version specified");
+      return nullptr;
+    }
 
     float clamped_x1 =
         std::max(0.0f, std::min(x1, static_cast<float>(input_img->cols)));
@@ -600,21 +641,8 @@ Java_org_photonvision_rubik_RubikJNI_detect
       continue;
     }
 
-#ifndef NDEBUG
-    if (candidateResults.size() < 5) {
-      std::printf(" DEBUG: box %d - uint8 corners: (%d, %d) to (%d, %d)\n", i,
-                  raw_x_1_u8, raw_y_1_u8, raw_x_2_u8, raw_y_2_u8);
-      std::printf(
-          "DEBUG: box %d - dequantized corners: (%.2f, %.2f) to (%.2f, %.2f)\n",
-          i, x1, y1, x2, y2);
-      std::printf(
-          "DEBUG: box %d - clamped corners: (%.2f, %.2f) to (%.2f, %.2f), "
-          "score=%.3f, class=%d\n",
-          i, clamped_x1, clamped_y1, clamped_x2, clamped_y2, score, classId);
-    }
-#endif
-
     detect_result_t det;
+
     det.box.left = static_cast<int>(std::round(clamped_x1));
     det.box.top = static_cast<int>(std::round(clamped_y1));
     det.box.right = static_cast<int>(std::round(clamped_x2));
