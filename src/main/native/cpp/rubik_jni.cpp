@@ -46,16 +46,18 @@
 #endif
 
 typedef struct _BOX_RECT {
-  int left;
-  int right;
-  int top;
-  int bottom;
+  int centerX;
+  int centerY;
+  int width;
+  int height;
+  double angle;
 } BOX_RECT;
 
 typedef struct RubikDetector {
   TfLiteInterpreter *interpreter;
   TfLiteDelegate *delegate;
   TfLiteModel *model;
+  int version;
 } RubikDetector;
 
 typedef struct __detect_result_t {
@@ -179,15 +181,15 @@ static jobject MakeJObject(JNIEnv *env, const detect_result_t &result) {
   }
 
   jmethodID constructor =
-      env->GetMethodID(detectionResultClass, "<init>", "(IIIIFI)V");
+      env->GetMethodID(detectionResultClass, "<init>", "(IIIIDFI)V");
   if (!constructor) {
     std::printf("ERROR: Could not find constructor for RubikResult!\n");
     return nullptr;
   }
 
-  return env->NewObject(detectionResultClass, constructor, result.box.left,
-                        result.box.top, result.box.right, result.box.bottom,
-                        result.obj_conf, result.id);
+  return env->NewObject(detectionResultClass, constructor, result.box.centerX,
+                        result.box.centerY, result.box.width, result.box.height,
+                        result.box.angle, result.obj_conf, result.id);
 }
 
 // Helper function to throw exceptions
@@ -204,11 +206,18 @@ void ThrowRuntimeException(JNIEnv *env, const char *message) {
  */
 JNIEXPORT jlong JNICALL
 Java_org_photonvision_rubik_RubikJNI_create
-  (JNIEnv *env, jobject obj, jstring modelPath)
+  (JNIEnv *env, jobject obj, jstring modelPath, jint version)
 {
   const char *model_name = env->GetStringUTFChars(modelPath, nullptr);
   if (model_name == nullptr) {
     ThrowRuntimeException(env, "Failed to retrieve model path");
+    return 0;
+  }
+
+  const int model_version = static_cast<int>(version);
+  if (model_version < 0 || model_version > 2) {
+    ThrowRuntimeException(env, "Unsupported YOLO version specified");
+    env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
   }
 
@@ -318,6 +327,7 @@ Java_org_photonvision_rubik_RubikJNI_create
   detector->interpreter = interpreter;
   detector->delegate = delegate;
   detector->model = model;
+  detector->version = model_version;
 
   // Convert RubikDetector pointer to jlong
   jlong ptr = reinterpret_cast<jlong>(detector);
@@ -350,6 +360,7 @@ Java_org_photonvision_rubik_RubikJNI_destroy
     TfLiteExternalDelegateDelete(detector->delegate);
   if (detector->model)
     TfLiteModelDelete(detector->model);
+  // We don't need to delete the version since it's just an int not a pointer
 
   // Delete the RubikDetector object
   delete detector;
@@ -358,23 +369,57 @@ Java_org_photonvision_rubik_RubikJNI_destroy
 }
 
 inline float calculateIoU(const BOX_RECT &box1, const BOX_RECT &box2) {
-  // Calculate intersection coordinates
-  const int x1 = std::max(box1.left, box2.left);
-  const int y1 = std::max(box1.top, box2.top);
-  const int x2 = std::min(box1.right, box2.right);
-  const int y2 = std::min(box1.bottom, box2.bottom);
+  // Convert to floats
+  float cx1 = static_cast<float>(box1.centerX);
+  float cy1 = static_cast<float>(box1.centerY);
+  float w1 = static_cast<float>(box1.width);
+  float h1 = static_cast<float>(box1.height);
+  float a1 = static_cast<float>(box1.angle); // assume degrees (OpenCV uses degrees)
 
-  // No intersection case
-  if (x2 <= x1 || y2 <= y1)
+  float cx2 = static_cast<float>(box2.centerX);
+  float cy2 = static_cast<float>(box2.centerY);
+  float w2 = static_cast<float>(box2.width);
+  float h2 = static_cast<float>(box2.height);
+  float a2 = static_cast<float>(box2.angle);
+
+  // Validate sizes
+  if (w1 <= 0.0f || h1 <= 0.0f || w2 <= 0.0f || h2 <= 0.0f)
     return 0.0f;
 
-  // Calculate areas using pre-computed values when possible
-  const int intersectionArea = (x2 - x1) * (y2 - y1);
-  const int area1 = (box1.right - box1.left) * (box1.bottom - box1.top);
-  const int area2 = (box2.right - box2.left) * (box2.bottom - box2.top);
+  // Create OpenCV RotatedRect (center, size, angle_in_degrees)
+  cv::RotatedRect r1(cv::Point2f(cx1, cy1), cv::Size2f(w1, h1), a1);
+  cv::RotatedRect r2(cv::Point2f(cx2, cy2), cv::Size2f(w2, h2), a2);
 
-  return static_cast<float>(intersectionArea) /
-         (area1 + area2 - intersectionArea);
+  // Compute intersection polygon
+  std::vector<cv::Point2f> interPts;
+  int ret = cv::rotatedRectangleIntersection(r1, r2, interPts);
+
+  if (ret == cv::INTERSECT_NONE)
+    return 0.0f;
+
+  // Areas of rectangles
+  float area1 = w1 * h1;
+  float area2 = w2 * h2;
+
+  // Intersection area
+  double intersectionArea = 0.0;
+  if (!interPts.empty()) {
+    intersectionArea = std::fabs(cv::contourArea(interPts));
+  } else {
+    // If OpenCV didn't return polygon points but indicates full intersection,
+    // fallback to min(area1, area2)
+    if (ret == cv::INTERSECT_FULL) {
+      intersectionArea = static_cast<double>(std::min(area1, area2));
+    } else {
+      intersectionArea = 0.0;
+    }
+  }
+
+  double unionArea = static_cast<double>(area1 + area2) - intersectionArea;
+  if (unionArea <= 0.0)
+    return 0.0f;
+
+  return static_cast<float>(intersectionArea / unionArea);
 }
 
 std::vector<detect_result_t>
@@ -600,6 +645,11 @@ Java_org_photonvision_rubik_RubikJNI_detect
       continue;
     }
 
+    float centerX = (clamped_x1 + clamped_x2) / 2.0f;
+    float centerY = (clamped_y1 + clamped_y2) / 2.0f;
+    float width = clamped_x2 - clamped_x1;
+    float height = clamped_y2 - clamped_y1;
+
 #ifndef NDEBUG
     if (candidateResults.size() < 5) {
       std::printf(" DEBUG: box %d - uint8 corners: (%d, %d) to (%d, %d)\n", i,
@@ -611,14 +661,18 @@ Java_org_photonvision_rubik_RubikJNI_detect
           "DEBUG: box %d - clamped corners: (%.2f, %.2f) to (%.2f, %.2f), "
           "score=%.3f, class=%d\n",
           i, clamped_x1, clamped_y1, clamped_x2, clamped_y2, score, classId);
+      std::printf(
+          "DEBUG: box %d - center=(%.2f, %.2f), width=%.2f, height=%.2f\n", i,
+          centerX, centerY, width, height);
     }
 #endif
 
     detect_result_t det;
-    det.box.left = static_cast<int>(std::round(clamped_x1));
-    det.box.top = static_cast<int>(std::round(clamped_y1));
-    det.box.right = static_cast<int>(std::round(clamped_x2));
-    det.box.bottom = static_cast<int>(std::round(clamped_y2));
+    det.box.centerX = static_cast<int>(std::round(centerX));
+    det.box.centerY = static_cast<int>(std::round(centerY));
+    det.box.width = static_cast<int>(std::round(width));
+    det.box.height = static_cast<int>(std::round(height));
+    det.box.angle = 0.0; // Angle is not predicted by the typical yolo model
     det.obj_conf = score;
     det.id = classId;
 
