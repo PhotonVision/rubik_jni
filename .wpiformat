@@ -9,19 +9,6 @@ cppSrcFileInclude {
   \.cpp$
 }
 
-modifiableFileExclude {
-  \.jpg$
-  \.jpeg$
-  \.png$
-  \.gif$
-  \.so$
-  \.dll$
-  \.webp$
-  \.ico$
-  \.tflite$
-  gradlew
-}
-
 includeProject {
   ^photonLib/
 }
