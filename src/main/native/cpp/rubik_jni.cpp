@@ -705,10 +705,14 @@ Java_org_photonvision_rubik_RubikJNI_isQuantized
     return JNI_FALSE;
   }
 
-  // Check if the tensor type is kTfLiteUInt8
+  // Check if the tensor type is kTfLiteUInt8 for regular yolo models,
+  // kTfliteInt8 for yolo_pro
   TfLiteType tensorType = TfLiteTensorType(input);
 
-  if (tensorType == kTfLiteUInt8) {
+  int version = detector->version;
+
+  if ((tensorType == kTfLiteUInt8 && version != 3) ||
+      (tensorType == kTfLiteInt8 && version == 3)) {
     DEBUG_PRINT("INFO: Input tensor is quantized\n");
     return JNI_TRUE; // The model is quantized
   } else {
