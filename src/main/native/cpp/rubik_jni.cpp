@@ -623,7 +623,10 @@ Java_org_photonvision_rubik_RubikJNI_detect
       x2 = x + w / 2.0f;
       y2 = y + h / 2.0f;
     } else {
-      ThrowRuntimeException(env, "Unsupported YOLO version specified. Actually though, this should be uncreachable. How'd you get here? Go open a ticket or something.");
+      ThrowRuntimeException(
+          env,
+          "Unsupported YOLO version specified. Actually though, this should be "
+          "uncreachable. How'd you get here? Go open a ticket or something.");
       return nullptr;
     }
 
