@@ -56,6 +56,7 @@ typedef struct RubikDetector {
   TfLiteInterpreter *interpreter;
   TfLiteDelegate *delegate;
   TfLiteModel *model;
+  int *version;
 } RubikDetector;
 
 typedef struct __detect_result_t {
@@ -200,11 +201,11 @@ void ThrowRuntimeException(JNIEnv *env, const char *message) {
 /*
  * Class:     org_photonvision_rubik_RubikJNI
  * Method:    create
- * Signature: (Ljava/lang/String;)J
+ * Signature: (Ljava/lang/String;I)J
  */
 JNIEXPORT jlong JNICALL
 Java_org_photonvision_rubik_RubikJNI_create
-  (JNIEnv *env, jobject obj, jstring modelPath)
+  (JNIEnv *env, jobject obj, jstring modelPath, jint modelVersion)
 {
   const char *model_name = env->GetStringUTFChars(modelPath, nullptr);
   if (model_name == nullptr) {
@@ -318,6 +319,7 @@ Java_org_photonvision_rubik_RubikJNI_create
   detector->interpreter = interpreter;
   detector->delegate = delegate;
   detector->model = model;
+  detector->version = new int(modelVersion);
 
   // Convert RubikDetector pointer to jlong
   jlong ptr = reinterpret_cast<jlong>(detector);
@@ -344,12 +346,18 @@ Java_org_photonvision_rubik_RubikJNI_destroy
   }
 
   // Now safely use the pointers
-  if (detector->interpreter)
+  if (detector->interpreter) {
     TfLiteInterpreterDelete(detector->interpreter);
-  if (detector->delegate)
+  }
+  if (detector->delegate) {
     TfLiteExternalDelegateDelete(detector->delegate);
-  if (detector->model)
+  }
+  if (detector->model) {
     TfLiteModelDelete(detector->model);
+  }
+  if (detector->version) {
+    delete detector->version;
+  }
 
   // Delete the RubikDetector object
   delete detector;
