@@ -215,7 +215,7 @@ Java_org_photonvision_rubik_RubikJNI_create
 
   const int model_version = static_cast<int>(version);
   // TODO: support 3 (obb) once that's merged in
-  if (model_version < 1 || model_version > 4 || model_version == 3) {
+  if (model_version < 1 || model_version > 3) {
     ThrowRuntimeException(env, "Unsupported YOLO version specified");
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
@@ -601,7 +601,7 @@ Java_org_photonvision_rubik_RubikJNI_detect
                              boxesParams.zero_point, boxesParams.scale);
       y2 = get_dequant_value(&raw_y_2_u8, kTfLiteUInt8, 0,
                              boxesParams.zero_point, boxesParams.scale);
-    } else if (version == 4) {
+    } else if (version == 3) {
       // For tensor shape [1, 8400, 4], use sequential indexing per detection
       uint8_t raw_x_u8 = boxesData[i * 4 + 0];
       uint8_t raw_y_u8 = boxesData[i * 4 + 1];
@@ -623,7 +623,7 @@ Java_org_photonvision_rubik_RubikJNI_detect
       x2 = x + w / 2.0f;
       y2 = y + h / 2.0f;
     } else {
-      ThrowRuntimeException(env, "Unsupported YOLO version specified");
+      ThrowRuntimeException(env, "Unsupported YOLO version specified. Actually though, this should be uncreachable. How'd you get here? Go open a ticket or something.");
       return nullptr;
     }
 
