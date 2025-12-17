@@ -77,9 +77,10 @@ public class RubikJNI {
      * Create a RubikJNI instance with the specified model path.
      *
      * @param modelPath Absolute path to the model file
+     * @param version The version of the model. yolov8=0, yolo11=1
      * @return A pointer to a struct with the tflite detector instance.
      */
-    public static native long create(String modelPath);
+    public static native long create(String modelPath, int version);
 
     /**
      * Destroy the RubikJNI instance.
