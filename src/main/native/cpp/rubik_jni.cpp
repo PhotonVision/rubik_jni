@@ -56,7 +56,7 @@ typedef struct RubikDetector {
   TfLiteInterpreter *interpreter;
   TfLiteDelegate *delegate;
   TfLiteModel *model;
-  int *version;
+  int version;
 } RubikDetector;
 
 typedef struct __detect_result_t {
@@ -198,6 +198,11 @@ void ThrowRuntimeException(JNIEnv *env, const char *message) {
   }
 }
 
+// Checks if a model is the basic yolo model
+bool isYolo(int version) {
+  return version >= 1 && version <= 2;
+}
+
 /*
  * Class:     org_photonvision_rubik_RubikJNI
  * Method:    create
@@ -205,11 +210,19 @@ void ThrowRuntimeException(JNIEnv *env, const char *message) {
  */
 JNIEXPORT jlong JNICALL
 Java_org_photonvision_rubik_RubikJNI_create
-  (JNIEnv *env, jobject obj, jstring modelPath, jint modelVersion)
+  (JNIEnv *env, jobject obj, jstring modelPath, jint version)
 {
   const char *model_name = env->GetStringUTFChars(modelPath, nullptr);
   if (model_name == nullptr) {
     ThrowRuntimeException(env, "Failed to retrieve model path");
+    return 0;
+  }
+
+  const int model_version = static_cast<int>(version);
+  // TODO: support 3 (obb) once that's merged in
+  if (!isYolo(model_version)) {
+    ThrowRuntimeException(env, "Unsupported YOLO version specified");
+    env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
   }
 
@@ -319,7 +332,7 @@ Java_org_photonvision_rubik_RubikJNI_create
   detector->interpreter = interpreter;
   detector->delegate = delegate;
   detector->model = model;
-  detector->version = new int(modelVersion);
+  detector->version = model_version;
 
   // Convert RubikDetector pointer to jlong
   jlong ptr = reinterpret_cast<jlong>(detector);
@@ -346,18 +359,13 @@ Java_org_photonvision_rubik_RubikJNI_destroy
   }
 
   // Now safely use the pointers
-  if (detector->interpreter) {
+  if (detector->interpreter)
     TfLiteInterpreterDelete(detector->interpreter);
-  }
-  if (detector->delegate) {
+  if (detector->delegate)
     TfLiteExternalDelegateDelete(detector->delegate);
-  }
-  if (detector->model) {
+  if (detector->model)
     TfLiteModelDelete(detector->model);
-  }
-  if (detector->version) {
-    delete detector->version;
-  }
+  // We don't need to delete the version since it's just an int not a pointer
 
   // Delete the RubikDetector object
   delete detector;
@@ -425,79 +433,9 @@ optimizedNMS(std::vector<detect_result_t> &candidates, float nmsThreshold) {
   return results;
 }
 
-/*
- * Class:     org_photonvision_rubik_RubikJNI
- * Method:    detect
- * Signature: (JJDD)[Ljava/lang/Object;
- */
-JNIEXPORT jobjectArray JNICALL
-Java_org_photonvision_rubik_RubikJNI_detect
-  (JNIEnv *env, jobject obj, jlong ptr, jlong input_cvmat_ptr,
-   jdouble boxThresh, jdouble nmsThreshold)
-{
-  RubikDetector *detector = reinterpret_cast<RubikDetector *>(ptr);
-
-  if (!detector) {
-    ThrowRuntimeException(env, "Invalid RubikDetector pointer");
-    return nullptr;
-  }
-
-  if (!detector->interpreter) {
-    ThrowRuntimeException(env, "Interpreter not initialized");
-    return nullptr;
-  }
-
-  TfLiteInterpreter *interpreter = detector->interpreter;
-  if (!interpreter) {
-    ThrowRuntimeException(env, "Invalid interpreter handle");
-    return nullptr;
-  }
-
-  TfLiteTensor *input = TfLiteInterpreterGetInputTensor(interpreter, 0);
-  int in_w, in_h, in_c;
-  if (!tensor_image_dims(input, &in_w, &in_h, &in_c)) {
-    ThrowRuntimeException(env, "Invalid input tensor shape");
-    return nullptr;
-  }
-
-  cv::Mat *input_img = reinterpret_cast<cv::Mat *>(input_cvmat_ptr);
-  if (!input_img || input_img->empty() || input_img->cols != in_w ||
-      input_img->rows != in_h) {
-    ThrowRuntimeException(env, "Invalid input image or mismatched dimensions");
-    return nullptr;
-  }
-
-  cv::Mat rgb;
-  if (input_img->channels() == 3) {
-    cv::cvtColor(*input_img, rgb, cv::COLOR_BGR2RGB);
-  } else {
-    ThrowRuntimeException(env, "Input image must be RGB");
-    return nullptr;
-  }
-
-  std::memcpy(TfLiteTensorData(input), rgb.data, TfLiteTensorByteSize(input));
-
-// Start timer for benchmark
-#ifndef NDEBUG
-  struct timespec start, end;
-  clock_gettime(CLOCK_MONOTONIC, &start); // Start timing
-#endif
-
-  if (TfLiteInterpreterInvoke(interpreter) != kTfLiteOk) {
-    ThrowRuntimeException(env, "Interpreter invocation failed");
-    return nullptr;
-  }
-
-#ifndef NDEBUG
-  clock_gettime(CLOCK_MONOTONIC, &end); // End timing
-
-  // Calculate elapsed time in milliseconds
-  double elapsed_time = (end.tv_sec - start.tv_sec) * 1000.0 +
-                        (end.tv_nsec - start.tv_nsec) / 1000000.0;
-
-  DEBUG_PRINT("INFO: Model execution time: %.2f ms\n", elapsed_time);
-#endif
-
+jobjectArray yoloPostProcess(TfLiteInterpreter *interpreter, double boxThresh,
+                             double nmsThreshold, JNIEnv *env,
+                             cv::Mat *input_img) {
   const TfLiteTensor *boxesTensor =
       TfLiteInterpreterGetOutputTensor(interpreter, 0);
   const TfLiteTensor *scoresTensor =
@@ -645,6 +583,93 @@ Java_org_photonvision_rubik_RubikJNI_detect
   }
 
   return jResults;
+}
+
+/*
+ * Class:     org_photonvision_rubik_RubikJNI
+ * Method:    detect
+ * Signature: (JJDD)[Ljava/lang/Object;
+ */
+JNIEXPORT jobjectArray JNICALL
+Java_org_photonvision_rubik_RubikJNI_detect
+  (JNIEnv *env, jobject obj, jlong ptr, jlong input_cvmat_ptr,
+   jdouble boxThresh, jdouble nmsThreshold)
+{
+  RubikDetector *detector = reinterpret_cast<RubikDetector *>(ptr);
+
+  if (!detector) {
+    ThrowRuntimeException(env, "Invalid RubikDetector pointer");
+    return nullptr;
+  }
+
+  int version = detector->version;
+
+  if (!detector->interpreter) {
+    ThrowRuntimeException(env, "Interpreter not initialized");
+    return nullptr;
+  }
+
+  TfLiteInterpreter *interpreter = detector->interpreter;
+  if (!interpreter) {
+    ThrowRuntimeException(env, "Invalid interpreter handle");
+    return nullptr;
+  }
+
+  TfLiteTensor *input = TfLiteInterpreterGetInputTensor(interpreter, 0);
+  int in_w, in_h, in_c;
+  if (!tensor_image_dims(input, &in_w, &in_h, &in_c)) {
+    ThrowRuntimeException(env, "Invalid input tensor shape");
+    return nullptr;
+  }
+
+  cv::Mat *input_img = reinterpret_cast<cv::Mat *>(input_cvmat_ptr);
+  if (!input_img || input_img->empty() || input_img->cols != in_w ||
+      input_img->rows != in_h) {
+    ThrowRuntimeException(env, "Invalid input image or mismatched dimensions");
+    return nullptr;
+  }
+
+  cv::Mat rgb;
+  if (input_img->channels() == 3) {
+    cv::cvtColor(*input_img, rgb, cv::COLOR_BGR2RGB);
+  } else {
+    ThrowRuntimeException(env, "Input image must be RGB");
+    return nullptr;
+  }
+
+  std::memcpy(TfLiteTensorData(input), rgb.data, TfLiteTensorByteSize(input));
+
+// Start timer for benchmark
+#ifndef NDEBUG
+  struct timespec start, end;
+  clock_gettime(CLOCK_MONOTONIC, &start); // Start timing
+#endif
+
+  if (TfLiteInterpreterInvoke(interpreter) != kTfLiteOk) {
+    ThrowRuntimeException(env, "Interpreter invocation failed");
+    return nullptr;
+  }
+
+#ifndef NDEBUG
+  clock_gettime(CLOCK_MONOTONIC, &end); // End timing
+
+  // Calculate elapsed time in milliseconds
+  double elapsed_time = (end.tv_sec - start.tv_sec) * 1000.0 +
+                        (end.tv_nsec - start.tv_nsec) / 1000000.0;
+
+  DEBUG_PRINT("INFO: Model execution time: %.2f ms\n", elapsed_time);
+#endif
+
+  if (isYolo(version)) {
+    return yoloPostProcess(interpreter, boxThresh, nmsThreshold, env,
+                           input_img);
+  }
+
+  ThrowRuntimeException(
+      env,
+      "Unsupported YOLO version specified. Actually though, this should be "
+      "uncreachable. How'd you get here? Go open a ticket or something.");
+  return nullptr;
 }
 
 /*
