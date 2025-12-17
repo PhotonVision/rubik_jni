@@ -428,6 +428,311 @@ optimizedNMS(std::vector<detect_result_t> &candidates, float nmsThreshold) {
   return results;
 }
 
+jobjectArray yoloProPostProcess(TfLiteInterpreter *interpreter,
+                                double boxThresh, double nmsThreshold,
+                                JNIEnv *env, cv::Mat *input_img) {
+
+  const TfLiteTensor *boxesTensor =
+      TfLiteInterpreterGetOutputTensor(interpreter, 0);
+  const TfLiteTensor *scoresTensor =
+      TfLiteInterpreterGetOutputTensor(interpreter, 1);
+  const TfLiteTensor *classesTensor =
+      TfLiteInterpreterGetOutputTensor(interpreter, 2);
+
+  const TfLiteQuantizationParams boxesParams =
+      TfLiteTensorQuantizationParams(boxesTensor);
+  const TfLiteQuantizationParams scoresParams =
+      TfLiteTensorQuantizationParams(scoresTensor);
+
+  const int numBoxes = TfLiteTensorDim(boxesTensor, 1);
+  DEBUG_PRINT("INFO: Detected %d boxes\n", numBoxes);
+
+  // Debug tensor shapes
+  DEBUG_PRINT("DEBUG: Boxes tensor dimensions: ");
+#ifndef NDEBUG
+  for (int i = 0; i < TfLiteTensorNumDims(boxesTensor); i++) {
+    std::printf("%d ", TfLiteTensorDim(boxesTensor, i));
+  }
+  std::printf("\n");
+#endif
+
+  DEBUG_PRINT("DEBUG: Scores tensor dimensions: ");
+#ifndef NDEBUG
+  for (int i = 0; i < TfLiteTensorNumDims(scoresTensor); i++) {
+    std::printf("%d ", TfLiteTensorDim(scoresTensor, i));
+  }
+  std::printf("\n");
+#endif
+
+  DEBUG_PRINT("DEBUG: Classes tensor dimensions: ");
+#ifndef NDEBUG
+  for (int i = 0; i < TfLiteTensorNumDims(classesTensor); i++) {
+    std::printf("%d ", TfLiteTensorDim(classesTensor, i));
+  }
+  std::printf("\n");
+#endif
+
+  if (TfLiteTensorType(boxesTensor) != kTfLiteUInt8) {
+    ThrowRuntimeException(env, "Expected uint8 tensor type");
+    return nullptr;
+  }
+
+  if (TfLiteTensorType(scoresTensor) != kTfLiteUInt8) {
+    ThrowRuntimeException(env, "Expected uint8 tensor type");
+    return nullptr;
+  }
+
+  if (TfLiteTensorType(classesTensor) != kTfLiteUInt8) {
+    ThrowRuntimeException(env, "Expected uint8 tensor type");
+    return nullptr;
+  }
+
+  uint8_t *boxesData = static_cast<uint8_t *>(TfLiteTensorData(boxesTensor));
+  uint8_t *scoresData = static_cast<uint8_t *>(TfLiteTensorData(scoresTensor));
+  uint8_t *classesData =
+      static_cast<uint8_t *>(TfLiteTensorData(classesTensor));
+
+  DEBUG_PRINT("DEBUG: Quantization params - boxes: zp=%d, scale=%f\n",
+              boxesParams.zero_point, boxesParams.scale);
+  DEBUG_PRINT("DEBUG: Quantization params - scores: zp=%d, scale=%f\n",
+              scoresParams.zero_point, scoresParams.scale);
+
+  std::vector<detect_result_t> candidateResults;
+
+  DEBUG_PRINT("DEBUG: Image dimensions: %dx%d\n", input_img->cols,
+              input_img->rows);
+
+  for (int i = 0; i < numBoxes; ++i) {
+    // Use proper dequantization for score
+    float score =
+        get_dequant_value(scoresData, kTfLiteUInt8, i, scoresParams.zero_point,
+                          scoresParams.scale);
+    if (score < boxThresh)
+      continue;
+
+    int classId = classesData[i];
+
+    // For tensor shape [1, 8400, 4], use sequential indexing per detection
+    uint8_t raw_x_1_u8 = boxesData[i * 4 + 0];
+    uint8_t raw_y_1_u8 = boxesData[i * 4 + 1];
+    uint8_t raw_x_2_u8 = boxesData[i * 4 + 2];
+    uint8_t raw_y_2_u8 = boxesData[i * 4 + 3];
+
+    // Use proper dequantization for bbox coordinates (like we do for scores)
+    float x1 = get_dequant_value(&raw_x_1_u8, kTfLiteUInt8, 0,
+                                 boxesParams.zero_point, boxesParams.scale);
+    float y1 = get_dequant_value(&raw_y_1_u8, kTfLiteUInt8, 0,
+                                 boxesParams.zero_point, boxesParams.scale);
+    float x2 = get_dequant_value(&raw_x_2_u8, kTfLiteUInt8, 0,
+                                 boxesParams.zero_point, boxesParams.scale);
+    float y2 = get_dequant_value(&raw_y_2_u8, kTfLiteUInt8, 0,
+                                 boxesParams.zero_point, boxesParams.scale);
+
+    float clamped_x1 =
+        std::max(0.0f, std::min(x1, static_cast<float>(input_img->cols)));
+    float clamped_y1 =
+        std::max(0.0f, std::min(y1, static_cast<float>(input_img->rows)));
+    float clamped_x2 =
+        std::max(0.0f, std::min(x2, static_cast<float>(input_img->cols)));
+    float clamped_y2 =
+        std::max(0.0f, std::min(y2, static_cast<float>(input_img->rows)));
+
+    // Skip bad boxes
+    if (clamped_x1 >= clamped_x2 || clamped_y1 >= clamped_y2) {
+      continue;
+    }
+
+#ifndef NDEBUG
+    if (candidateResults.size() < 5) {
+      std::printf(" DEBUG: box %d - uint8 corners: (%d, %d) to (%d, %d)\n", i,
+                  raw_x_1_u8, raw_y_1_u8, raw_x_2_u8, raw_y_2_u8);
+      std::printf(
+          "DEBUG: box %d - dequantized corners: (%.2f, %.2f) to (%.2f, %.2f)\n",
+          i, x1, y1, x2, y2);
+      std::printf(
+          "DEBUG: box %d - clamped corners: (%.2f, %.2f) to (%.2f, %.2f), "
+          "score=%.3f, class=%d\n",
+          i, clamped_x1, clamped_y1, clamped_x2, clamped_y2, score, classId);
+    }
+#endif
+
+    detect_result_t det;
+    det.box.left = static_cast<int>(std::round(clamped_x1));
+    det.box.top = static_cast<int>(std::round(clamped_y1));
+    det.box.right = static_cast<int>(std::round(clamped_x2));
+    det.box.bottom = static_cast<int>(std::round(clamped_y2));
+    det.obj_conf = score;
+    det.id = classId;
+
+    candidateResults.push_back(det);
+  }
+
+  // NMS
+  std::vector<detect_result_t> results =
+      optimizedNMS(candidateResults, static_cast<float>(nmsThreshold));
+
+  jobjectArray jResults =
+      env->NewObjectArray(results.size(), detectionResultClass, nullptr);
+  for (size_t i = 0; i < results.size(); ++i) {
+    jobject jDet = MakeJObject(env, results[i]);
+    env->SetObjectArrayElement(jResults, i, jDet);
+  }
+
+  return jResults;
+}
+
+jobjectArray yoloPostProcess(TfLiteInterpreter *interpreter, double boxThresh,
+                             double nmsThreshold, JNIEnv *env,
+                             cv::Mat *input_img) {
+  const TfLiteTensor *boxesTensor =
+      TfLiteInterpreterGetOutputTensor(interpreter, 0);
+  const TfLiteTensor *scoresTensor =
+      TfLiteInterpreterGetOutputTensor(interpreter, 1);
+  const TfLiteTensor *classesTensor =
+      TfLiteInterpreterGetOutputTensor(interpreter, 2);
+
+  const TfLiteQuantizationParams boxesParams =
+      TfLiteTensorQuantizationParams(boxesTensor);
+  const TfLiteQuantizationParams scoresParams =
+      TfLiteTensorQuantizationParams(scoresTensor);
+
+  const int numBoxes = TfLiteTensorDim(boxesTensor, 1);
+  DEBUG_PRINT("INFO: Detected %d boxes\n", numBoxes);
+
+  // Debug tensor shapes
+  DEBUG_PRINT("DEBUG: Boxes tensor dimensions: ");
+#ifndef NDEBUG
+  for (int i = 0; i < TfLiteTensorNumDims(boxesTensor); i++) {
+    std::printf("%d ", TfLiteTensorDim(boxesTensor, i));
+  }
+  std::printf("\n");
+#endif
+
+  DEBUG_PRINT("DEBUG: Scores tensor dimensions: ");
+#ifndef NDEBUG
+  for (int i = 0; i < TfLiteTensorNumDims(scoresTensor); i++) {
+    std::printf("%d ", TfLiteTensorDim(scoresTensor, i));
+  }
+  std::printf("\n");
+#endif
+
+  DEBUG_PRINT("DEBUG: Classes tensor dimensions: ");
+#ifndef NDEBUG
+  for (int i = 0; i < TfLiteTensorNumDims(classesTensor); i++) {
+    std::printf("%d ", TfLiteTensorDim(classesTensor, i));
+  }
+  std::printf("\n");
+#endif
+
+  if (TfLiteTensorType(boxesTensor) != kTfLiteUInt8) {
+    ThrowRuntimeException(env, "Expected uint8 tensor type");
+    return nullptr;
+  }
+
+  if (TfLiteTensorType(scoresTensor) != kTfLiteUInt8) {
+    ThrowRuntimeException(env, "Expected uint8 tensor type");
+    return nullptr;
+  }
+
+  if (TfLiteTensorType(classesTensor) != kTfLiteUInt8) {
+    ThrowRuntimeException(env, "Expected uint8 tensor type");
+    return nullptr;
+  }
+
+  uint8_t *boxesData = static_cast<uint8_t *>(TfLiteTensorData(boxesTensor));
+  uint8_t *scoresData = static_cast<uint8_t *>(TfLiteTensorData(scoresTensor));
+  uint8_t *classesData =
+      static_cast<uint8_t *>(TfLiteTensorData(classesTensor));
+
+  DEBUG_PRINT("DEBUG: Quantization params - boxes: zp=%d, scale=%f\n",
+              boxesParams.zero_point, boxesParams.scale);
+  DEBUG_PRINT("DEBUG: Quantization params - scores: zp=%d, scale=%f\n",
+              scoresParams.zero_point, scoresParams.scale);
+
+  std::vector<detect_result_t> candidateResults;
+
+  DEBUG_PRINT("DEBUG: Image dimensions: %dx%d\n", input_img->cols,
+              input_img->rows);
+
+  for (int i = 0; i < numBoxes; ++i) {
+    // Use proper dequantization for score
+    float score =
+        get_dequant_value(scoresData, kTfLiteUInt8, i, scoresParams.zero_point,
+                          scoresParams.scale);
+    if (score < boxThresh)
+      continue;
+
+    int classId = classesData[i];
+
+    // For tensor shape [1, 8400, 4], use sequential indexing per detection
+    uint8_t raw_x_1_u8 = boxesData[i * 4 + 0];
+    uint8_t raw_y_1_u8 = boxesData[i * 4 + 1];
+    uint8_t raw_x_2_u8 = boxesData[i * 4 + 2];
+    uint8_t raw_y_2_u8 = boxesData[i * 4 + 3];
+
+    // Use proper dequantization for bbox coordinates (like we do for scores)
+    float x1 = get_dequant_value(&raw_x_1_u8, kTfLiteUInt8, 0,
+                                 boxesParams.zero_point, boxesParams.scale);
+    float y1 = get_dequant_value(&raw_y_1_u8, kTfLiteUInt8, 0,
+                                 boxesParams.zero_point, boxesParams.scale);
+    float x2 = get_dequant_value(&raw_x_2_u8, kTfLiteUInt8, 0,
+                                 boxesParams.zero_point, boxesParams.scale);
+    float y2 = get_dequant_value(&raw_y_2_u8, kTfLiteUInt8, 0,
+                                 boxesParams.zero_point, boxesParams.scale);
+
+    float clamped_x1 =
+        std::max(0.0f, std::min(x1, static_cast<float>(input_img->cols)));
+    float clamped_y1 =
+        std::max(0.0f, std::min(y1, static_cast<float>(input_img->rows)));
+    float clamped_x2 =
+        std::max(0.0f, std::min(x2, static_cast<float>(input_img->cols)));
+    float clamped_y2 =
+        std::max(0.0f, std::min(y2, static_cast<float>(input_img->rows)));
+
+    // Skip bad boxes
+    if (clamped_x1 >= clamped_x2 || clamped_y1 >= clamped_y2) {
+      continue;
+    }
+
+#ifndef NDEBUG
+    if (candidateResults.size() < 5) {
+      std::printf(" DEBUG: box %d - uint8 corners: (%d, %d) to (%d, %d)\n", i,
+                  raw_x_1_u8, raw_y_1_u8, raw_x_2_u8, raw_y_2_u8);
+      std::printf(
+          "DEBUG: box %d - dequantized corners: (%.2f, %.2f) to (%.2f, %.2f)\n",
+          i, x1, y1, x2, y2);
+      std::printf(
+          "DEBUG: box %d - clamped corners: (%.2f, %.2f) to (%.2f, %.2f), "
+          "score=%.3f, class=%d\n",
+          i, clamped_x1, clamped_y1, clamped_x2, clamped_y2, score, classId);
+    }
+#endif
+
+    detect_result_t det;
+    det.box.left = static_cast<int>(std::round(clamped_x1));
+    det.box.top = static_cast<int>(std::round(clamped_y1));
+    det.box.right = static_cast<int>(std::round(clamped_x2));
+    det.box.bottom = static_cast<int>(std::round(clamped_y2));
+    det.obj_conf = score;
+    det.id = classId;
+
+    candidateResults.push_back(det);
+  }
+
+  // NMS
+  std::vector<detect_result_t> results =
+      optimizedNMS(candidateResults, static_cast<float>(nmsThreshold));
+
+  jobjectArray jResults =
+      env->NewObjectArray(results.size(), detectionResultClass, nullptr);
+  for (size_t i = 0; i < results.size(); ++i) {
+    jobject jDet = MakeJObject(env, results[i]);
+    env->SetObjectArrayElement(jResults, i, jDet);
+  }
+
+  return jResults;
+}
+
 /*
  * Class:     org_photonvision_rubik_RubikJNI
  * Method:    detect
@@ -510,312 +815,11 @@ Java_org_photonvision_rubik_RubikJNI_detect
     return yoloProPostProcess(interpreter, boxThresh, nmsThreshold, env,
                               input_img);
   }
-}
 
-jobjectArray yoloProPostProcess(TfLiteInterpreter interpreter, double boxThresh,
-                                double nmsThreshold, JNIEnv *env,
-                                cv::Mat *input_img) {
-
-  const TfLiteTensor *boxesTensor =
-      TfLiteInterpreterGetOutputTensor(interpreter, 0);
-  const TfLiteTensor *scoresTensor =
-      TfLiteInterpreterGetOutputTensor(interpreter, 1);
-  const TfLiteTensor *classesTensor =
-      TfLiteInterpreterGetOutputTensor(interpreter, 2);
-
-  const TfLiteQuantizationParams boxesParams =
-      TfLiteTensorQuantizationParams(boxesTensor);
-  const TfLiteQuantizationParams scoresParams =
-      TfLiteTensorQuantizationParams(scoresTensor);
-
-  const int numBoxes = TfLiteTensorDim(boxesTensor, 1);
-  DEBUG_PRINT("INFO: Detected %d boxes\n", numBoxes);
-
-  // Debug tensor shapes
-  DEBUG_PRINT("DEBUG: Boxes tensor dimensions: ");
-#ifndef NDEBUG
-  for (int i = 0; i < TfLiteTensorNumDims(boxesTensor); i++) {
-    std::printf("%d ", TfLiteTensorDim(boxesTensor, i));
-  }
-  std::printf("\n");
-#endif
-
-  DEBUG_PRINT("DEBUG: Scores tensor dimensions: ");
-#ifndef NDEBUG
-  for (int i = 0; i < TfLiteTensorNumDims(scoresTensor); i++) {
-    std::printf("%d ", TfLiteTensorDim(scoresTensor, i));
-  }
-  std::printf("\n");
-#endif
-
-  DEBUG_PRINT("DEBUG: Classes tensor dimensions: ");
-#ifndef NDEBUG
-  for (int i = 0; i < TfLiteTensorNumDims(classesTensor); i++) {
-    std::printf("%d ", TfLiteTensorDim(classesTensor, i));
-  }
-  std::printf("\n");
-#endif
-
-  if (TfLiteTensorType(boxesTensor) != kTfLiteUInt8) {
-    ThrowRuntimeException(env, "Expected uint8 tensor type");
-    return nullptr;
-  }
-
-  if (TfLiteTensorType(scoresTensor) != kTfLiteUInt8) {
-    ThrowRuntimeException(env, "Expected uint8 tensor type");
-    return nullptr;
-  }
-
-  if (TfLiteTensorType(classesTensor) != kTfLiteUInt8) {
-    ThrowRuntimeException(env, "Expected uint8 tensor type");
-    return nullptr;
-  }
-
-  uint8_t *boxesData = static_cast<uint8_t *>(TfLiteTensorData(boxesTensor));
-  uint8_t *scoresData = static_cast<uint8_t *>(TfLiteTensorData(scoresTensor));
-  uint8_t *classesData =
-      static_cast<uint8_t *>(TfLiteTensorData(classesTensor));
-
-  DEBUG_PRINT("DEBUG: Quantization params - boxes: zp=%d, scale=%f\n",
-              boxesParams.zero_point, boxesParams.scale);
-  DEBUG_PRINT("DEBUG: Quantization params - scores: zp=%d, scale=%f\n",
-              scoresParams.zero_point, scoresParams.scale);
-
-  std::vector<detect_result_t> candidateResults;
-
-  DEBUG_PRINT("DEBUG: Image dimensions: %dx%d\n", input_img->cols,
-              input_img->rows);
-
-  for (int i = 0; i < numBoxes; ++i) {
-    // Use proper dequantization for score
-    float score =
-        get_dequant_value(scoresData, kTfLiteUInt8, i, scoresParams.zero_point,
-                          scoresParams.scale);
-    if (score < boxThresh)
-      continue;
-
-    int classId = classesData[i];
-
-    // For tensor shape [1, 8400, 4], use sequential indexing per detection
-    uint8_t raw_x_1_u8 = boxesData[i * 4 + 0];
-    uint8_t raw_y_1_u8 = boxesData[i * 4 + 1];
-    uint8_t raw_x_2_u8 = boxesData[i * 4 + 2];
-    uint8_t raw_y_2_u8 = boxesData[i * 4 + 3];
-
-    // Use proper dequantization for bbox coordinates (like we do for scores)
-    float x1 = get_dequant_value(&raw_x_1_u8, kTfLiteUInt8, 0,
-                                 boxesParams.zero_point, boxesParams.scale);
-    float y1 = get_dequant_value(&raw_y_1_u8, kTfLiteUInt8, 0,
-                                 boxesParams.zero_point, boxesParams.scale);
-    float x2 = get_dequant_value(&raw_x_2_u8, kTfLiteUInt8, 0,
-                                 boxesParams.zero_point, boxesParams.scale);
-    float y2 = get_dequant_value(&raw_y_2_u8, kTfLiteUInt8, 0,
-                                 boxesParams.zero_point, boxesParams.scale);
-
-    float clamped_x1 =
-        std::max(0.0f, std::min(x1, static_cast<float>(input_img->cols)));
-    float clamped_y1 =
-        std::max(0.0f, std::min(y1, static_cast<float>(input_img->rows)));
-    float clamped_x2 =
-        std::max(0.0f, std::min(x2, static_cast<float>(input_img->cols)));
-    float clamped_y2 =
-        std::max(0.0f, std::min(y2, static_cast<float>(input_img->rows)));
-
-    // Skip bad boxes
-    if (clamped_x1 >= clamped_x2 || clamped_y1 >= clamped_y2) {
-      continue;
-    }
-
-#ifndef NDEBUG
-    if (candidateResults.size() < 5) {
-      std::printf(" DEBUG: box %d - uint8 corners: (%d, %d) to (%d, %d)\n", i,
-                  raw_x_1_u8, raw_y_1_u8, raw_x_2_u8, raw_y_2_u8);
-      std::printf(
-          "DEBUG: box %d - dequantized corners: (%.2f, %.2f) to (%.2f, %.2f)\n",
-          i, x1, y1, x2, y2);
-      std::printf(
-          "DEBUG: box %d - clamped corners: (%.2f, %.2f) to (%.2f, %.2f), "
-          "score=%.3f, class=%d\n",
-          i, clamped_x1, clamped_y1, clamped_x2, clamped_y2, score, classId);
-    }
-#endif
-
-    detect_result_t det;
-    det.box.left = static_cast<int>(std::round(clamped_x1));
-    det.box.top = static_cast<int>(std::round(clamped_y1));
-    det.box.right = static_cast<int>(std::round(clamped_x2));
-    det.box.bottom = static_cast<int>(std::round(clamped_y2));
-    det.obj_conf = score;
-    det.id = classId;
-
-    candidateResults.push_back(det);
-  }
-
-  // NMS
-  std::vector<detect_result_t> results =
-      optimizedNMS(candidateResults, static_cast<float>(nmsThreshold));
-
-  jobjectArray jResults =
-      env->NewObjectArray(results.size(), detectionResultClass, nullptr);
-  for (size_t i = 0; i < results.size(); ++i) {
-    jobject jDet = MakeJObject(env, results[i]);
-    env->SetObjectArrayElement(jResults, i, jDet);
-  }
-
-  return jResults;
-}
-
-jobjectArray yoloPostProcess(TfLiteInterpreter interpreter, double boxThresh,
-                             double nmsThreshold, JNIEnv *env,
-                             cv::Mat *input_img) {
-
-  const TfLiteTensor *boxesTensor =
-      TfLiteInterpreterGetOutputTensor(interpreter, 0);
-  const TfLiteTensor *scoresTensor =
-      TfLiteInterpreterGetOutputTensor(interpreter, 1);
-  const TfLiteTensor *classesTensor =
-      TfLiteInterpreterGetOutputTensor(interpreter, 2);
-
-  const TfLiteQuantizationParams boxesParams =
-      TfLiteTensorQuantizationParams(boxesTensor);
-  const TfLiteQuantizationParams scoresParams =
-      TfLiteTensorQuantizationParams(scoresTensor);
-
-  const int numBoxes = TfLiteTensorDim(boxesTensor, 1);
-  DEBUG_PRINT("INFO: Detected %d boxes\n", numBoxes);
-
-  // Debug tensor shapes
-  DEBUG_PRINT("DEBUG: Boxes tensor dimensions: ");
-#ifndef NDEBUG
-  for (int i = 0; i < TfLiteTensorNumDims(boxesTensor); i++) {
-    std::printf("%d ", TfLiteTensorDim(boxesTensor, i));
-  }
-  std::printf("\n");
-#endif
-
-  DEBUG_PRINT("DEBUG: Scores tensor dimensions: ");
-#ifndef NDEBUG
-  for (int i = 0; i < TfLiteTensorNumDims(scoresTensor); i++) {
-    std::printf("%d ", TfLiteTensorDim(scoresTensor, i));
-  }
-  std::printf("\n");
-#endif
-
-  DEBUG_PRINT("DEBUG: Classes tensor dimensions: ");
-#ifndef NDEBUG
-  for (int i = 0; i < TfLiteTensorNumDims(classesTensor); i++) {
-    std::printf("%d ", TfLiteTensorDim(classesTensor, i));
-  }
-  std::printf("\n");
-#endif
-
-  if (TfLiteTensorType(boxesTensor) != kTfLiteUInt8) {
-    ThrowRuntimeException(env, "Expected uint8 tensor type");
-    return nullptr;
-  }
-
-  if (TfLiteTensorType(scoresTensor) != kTfLiteUInt8) {
-    ThrowRuntimeException(env, "Expected uint8 tensor type");
-    return nullptr;
-  }
-
-  if (TfLiteTensorType(classesTensor) != kTfLiteUInt8) {
-    ThrowRuntimeException(env, "Expected uint8 tensor type");
-    return nullptr;
-  }
-
-  uint8_t *boxesData = static_cast<uint8_t *>(TfLiteTensorData(boxesTensor));
-  uint8_t *scoresData = static_cast<uint8_t *>(TfLiteTensorData(scoresTensor));
-  uint8_t *classesData =
-      static_cast<uint8_t *>(TfLiteTensorData(classesTensor));
-
-  DEBUG_PRINT("DEBUG: Quantization params - boxes: zp=%d, scale=%f\n",
-              boxesParams.zero_point, boxesParams.scale);
-  DEBUG_PRINT("DEBUG: Quantization params - scores: zp=%d, scale=%f\n",
-              scoresParams.zero_point, scoresParams.scale);
-
-  std::vector<detect_result_t> candidateResults;
-
-  DEBUG_PRINT("DEBUG: Image dimensions: %dx%d\n", input_img->cols,
-              input_img->rows);
-
-  for (int i = 0; i < numBoxes; ++i) {
-    // Use proper dequantization for score
-    float score =
-        get_dequant_value(scoresData, kTfLiteUInt8, i, scoresParams.zero_point,
-                          scoresParams.scale);
-    if (score < boxThresh)
-      continue;
-
-    int classId = classesData[i];
-
-    // For tensor shape [1, 8400, 4], use sequential indexing per detection
-    uint8_t raw_x_1_u8 = boxesData[i * 4 + 0];
-    uint8_t raw_y_1_u8 = boxesData[i * 4 + 1];
-    uint8_t raw_x_2_u8 = boxesData[i * 4 + 2];
-    uint8_t raw_y_2_u8 = boxesData[i * 4 + 3];
-
-    // Use proper dequantization for bbox coordinates (like we do for scores)
-    float x1 = get_dequant_value(&raw_x_1_u8, kTfLiteUInt8, 0,
-                                 boxesParams.zero_point, boxesParams.scale);
-    float y1 = get_dequant_value(&raw_y_1_u8, kTfLiteUInt8, 0,
-                                 boxesParams.zero_point, boxesParams.scale);
-    float x2 = get_dequant_value(&raw_x_2_u8, kTfLiteUInt8, 0,
-                                 boxesParams.zero_point, boxesParams.scale);
-    float y2 = get_dequant_value(&raw_y_2_u8, kTfLiteUInt8, 0,
-                                 boxesParams.zero_point, boxesParams.scale);
-
-    float clamped_x1 =
-        std::max(0.0f, std::min(x1, static_cast<float>(input_img->cols)));
-    float clamped_y1 =
-        std::max(0.0f, std::min(y1, static_cast<float>(input_img->rows)));
-    float clamped_x2 =
-        std::max(0.0f, std::min(x2, static_cast<float>(input_img->cols)));
-    float clamped_y2 =
-        std::max(0.0f, std::min(y2, static_cast<float>(input_img->rows)));
-
-    // Skip bad boxes
-    if (clamped_x1 >= clamped_x2 || clamped_y1 >= clamped_y2) {
-      continue;
-    }
-
-#ifndef NDEBUG
-    if (candidateResults.size() < 5) {
-      std::printf(" DEBUG: box %d - uint8 corners: (%d, %d) to (%d, %d)\n", i,
-                  raw_x_1_u8, raw_y_1_u8, raw_x_2_u8, raw_y_2_u8);
-      std::printf(
-          "DEBUG: box %d - dequantized corners: (%.2f, %.2f) to (%.2f, %.2f)\n",
-          i, x1, y1, x2, y2);
-      std::printf(
-          "DEBUG: box %d - clamped corners: (%.2f, %.2f) to (%.2f, %.2f), "
-          "score=%.3f, class=%d\n",
-          i, clamped_x1, clamped_y1, clamped_x2, clamped_y2, score, classId);
-    }
-#endif
-
-    detect_result_t det;
-    det.box.left = static_cast<int>(std::round(clamped_x1));
-    det.box.top = static_cast<int>(std::round(clamped_y1));
-    det.box.right = static_cast<int>(std::round(clamped_x2));
-    det.box.bottom = static_cast<int>(std::round(clamped_y2));
-    det.obj_conf = score;
-    det.id = classId;
-
-    candidateResults.push_back(det);
-  }
-
-  // NMS
-  std::vector<detect_result_t> results =
-      optimizedNMS(candidateResults, static_cast<float>(nmsThreshold));
-
-  jobjectArray jResults =
-      env->NewObjectArray(results.size(), detectionResultClass, nullptr);
-  for (size_t i = 0; i < results.size(); ++i) {
-    jobject jDet = MakeJObject(env, results[i]);
-    env->SetObjectArrayElement(jResults, i, jDet);
-  }
-
-  return jResults;
+  ThrowRuntimeException(
+      env,
+      "Unsupported YOLO version specified. Actually though, this should be "
+      "uncreachable. How'd you get here? Go open a ticket or something.");
 }
 
 /*
