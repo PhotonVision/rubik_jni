@@ -82,15 +82,11 @@ public class RubikTest {
                 }
 
                 // Draw bounding box on the image
-                Imgproc.rectangle(
-                        img,
-                        new Point(result.rect.center.x, result.rect.center.y),
-                        new Point(
-                                result.rect.center.x + result.rect.size.width,
-                                result.rect.center.y + result.rect.size.height),
-                        color,
-                        2 // Thickness
-                        );
+                Point[] rectPoints = new Point[4];
+                result.rect.points(rectPoints);
+                for (int j = 0; j < 4; j++) {
+                    Imgproc.line(img, rectPoints[j], rectPoints[(j + 1) % 4], color, 2, 8);
+                }
 
                 // Put label text
                 // Imgproc.putText(
@@ -222,7 +218,7 @@ public class RubikTest {
         long startTime = System.nanoTime();
 
         for (int i = 0; i < numRuns; i++) {
-            RubikResult[] ret = RubikJNI.detect(ptr, img.getNativeObjAddr(), 0.5f, 0.45f);
+            RubikJNI.detect(ptr, img.getNativeObjAddr(), 0.5f, 0.45f);
         }
 
         long endTime = System.nanoTime();
