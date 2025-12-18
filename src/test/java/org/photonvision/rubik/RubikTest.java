@@ -36,81 +36,83 @@ public class RubikTest {
     public void testBasicBlobs() {
         try {
             CombinedRuntimeLoader.loadLibraries(RubikTest.class, Core.NATIVE_LIBRARY_NAME);
+
+            System.out.println(Core.getBuildInformation());
+            System.out.println(Core.OpenCLApiCallError);
+
+            System.out.println("Loading rubik_jni");
+            System.load("/home/photon/rubik_jni/cmake_build/librubik_jni.so");
+
+            System.out.println("Loading bus");
+            Mat img = Imgcodecs.imread("src/test/resources/bus.jpg");
+
+            if (img.empty()) {
+                throw new RuntimeException("Failed to load image");
+            }
+
+            System.out.println("Image loaded: " + img.size() + " " + img.type());
+
+            System.out.println("Creating Rubik detector");
+            long ptr = RubikJNI.create("/home/photon/rubik_jni/src/test/resources/yolov8nCoco.tflite", 1);
+
+            if (ptr == 0) {
+                throw new RuntimeException("Failed to create Rubik detector");
+            }
+
+            System.out.println("Rubik detector created: " + ptr);
+
+            assertTrue(RubikJNI.isQuantized(ptr), "Rubik detector should be quantized");
+
+            RubikResult[] ret = RubikJNI.detect(ptr, img.getNativeObjAddr(), 0.5f, 0.45f);
+
+            System.out.println("Detection results: " + Arrays.toString(ret));
+
+            System.out.println("Releasing Rubik detector");
+            RubikJNI.destroy(ptr);
+
+            for (RubikResult result : ret) {
+                System.out.println("Result: " + result);
+
+                Scalar color = new Scalar(0, 255, 0); // Green color is default for bounding box
+
+                if (result.class_id == 0) {
+                    color = new Scalar(255, 0, 0); // Blue for person
+                } else if (result.class_id == 5) {
+                    color = new Scalar(0, 0, 255); // Red for bus
+                }
+
+                // Draw bounding box on the image
+                Imgproc.rectangle(
+                        img,
+                        new Point(result.rect.center.x, result.rect.center.y),
+                        new Point(
+                                result.rect.center.x + result.rect.size.width,
+                                result.rect.center.y + result.rect.size.height),
+                        color,
+                        2 // Thickness
+                        );
+
+                // Put label text
+                // Imgproc.putText(
+                //     img,
+                //     result.class_id + " " + String.format("%.2f", result.conf),
+                //     new Point(result.rect.x, result.rect.y - 10),
+                //     Imgproc.FONT_HERSHEY_SIMPLEX,
+                //     0.5, // Font scale
+                //     new Scalar(0, 255, 0), // Green color
+                //     1 // Thickness
+                // );
+            }
+
+            // Save the image with results
+            Imgcodecs.imwrite("src/test/resources/bus_with_results.jpg", img);
+            System.out.println("Results written to image and saved as bus_with_results.jpg");
+
         } catch (IOException e) {
             // TODO Auto-generated catch block
             e.printStackTrace();
+            System.out.println(e.toString());
         }
-
-        System.out.println(Core.getBuildInformation());
-        System.out.println(Core.OpenCLApiCallError);
-
-        System.out.println("Loading rubik_jni");
-        System.load("/home/photon/rubik_jni/cmake_build/librubik_jni.so");
-
-        System.out.println("Loading bus");
-        Mat img = Imgcodecs.imread("src/test/resources/bus.jpg");
-
-        if (img.empty()) {
-            throw new RuntimeException("Failed to load image");
-        }
-
-        System.out.println("Image loaded: " + img.size() + " " + img.type());
-
-        System.out.println("Creating Rubik detector");
-        long ptr = RubikJNI.create("/home/photon/rubik_jni/src/test/resources/yolov8nCoco.tflite", 0);
-
-        if (ptr == 0) {
-            throw new RuntimeException("Failed to create Rubik detector");
-        }
-
-        System.out.println("Rubik detector created: " + ptr);
-
-        assertTrue(RubikJNI.isQuantized(ptr), "Rubik detector should be quantized");
-
-        RubikResult[] ret = RubikJNI.detect(ptr, img.getNativeObjAddr(), 0.5f, 0.45f);
-
-        System.out.println("Detection results: " + Arrays.toString(ret));
-
-        System.out.println("Releasing Rubik detector");
-        RubikJNI.destroy(ptr);
-
-        for (RubikResult result : ret) {
-            System.out.println("Result: " + result);
-
-            Scalar color = new Scalar(0, 255, 0); // Green color is default for bounding box
-
-            if (result.class_id == 0) {
-                color = new Scalar(255, 0, 0); // Blue for person
-            } else if (result.class_id == 5) {
-                color = new Scalar(0, 0, 255); // Red for bus
-            }
-
-            // Draw bounding box on the image
-            Imgproc.rectangle(
-                    img,
-                    new Point(result.rect.center.x, result.rect.center.y),
-                    new Point(
-                            result.rect.center.x + result.rect.size.width,
-                            result.rect.center.y + result.rect.size.height),
-                    color,
-                    2 // Thickness
-                    );
-
-            // Put label text
-            // Imgproc.putText(
-            //     img,
-            //     result.class_id + " " + String.format("%.2f", result.conf),
-            //     new Point(result.rect.x, result.rect.y - 10),
-            //     Imgproc.FONT_HERSHEY_SIMPLEX,
-            //     0.5, // Font scale
-            //     new Scalar(0, 255, 0), // Green color
-            //     1 // Thickness
-            // );
-        }
-
-        // Save the image with results
-        Imgcodecs.imwrite("src/test/resources/bus_with_results.jpg", img);
-        System.out.println("Results written to image and saved as bus_with_results.jpg");
     }
 
     // Helper method to determine if the memory leak test should be enabled
