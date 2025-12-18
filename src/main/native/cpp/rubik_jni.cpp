@@ -46,10 +46,10 @@
 #endif
 
 typedef struct _BOX_RECT {
-  int left;
-  int right;
-  int top;
-  int bottom;
+  int x1;
+  int x2;
+  int y1;
+  int y2;
   double angle;
 } BOX_RECT;
 
@@ -181,15 +181,15 @@ static jobject MakeJObject(JNIEnv *env, const detect_result_t &result) {
   }
 
   jmethodID constructor =
-      env->GetMethodID(detectionResultClass, "<init>", "(IIIIFI)V");
+      env->GetMethodID(detectionResultClass, "<init>", "(IIIIFIF)V");
   if (!constructor) {
     std::printf("ERROR: Could not find constructor for RubikResult!\n");
     return nullptr;
   }
 
-  return env->NewObject(detectionResultClass, constructor, result.box.left,
-                        result.box.top, result.box.right, result.box.bottom,
-                        result.obj_conf, result.id);
+  return env->NewObject(detectionResultClass, constructor, result.box.x1,
+                        result.box.y1, result.box.x2, result.box.y2,
+                        result.obj_conf, result.id, result.box.angle);
 }
 
 // Helper function to throw exceptions
@@ -378,10 +378,10 @@ inline float calculateIoU(const BOX_RECT &box1, const BOX_RECT &box2) {
   // Optimization: If both angles are effectively zero, use faster AABB
   // calculation
   if (std::abs(box1.angle) < 0.1 && std::abs(box2.angle) < 0.1) {
-    const int x1 = std::max(box1.left, box2.left);
-    const int y1 = std::max(box1.top, box2.top);
-    const int x2 = std::min(box1.right, box2.right);
-    const int y2 = std::min(box1.bottom, box2.bottom);
+    const int x1 = std::max(box1.x1, box2.x1);
+    const int y1 = std::max(box1.y1, box2.y1);
+    const int x2 = std::min(box1.x2, box2.x2);
+    const int y2 = std::min(box1.y2, box2.y2);
 
     // No intersection case
     if (x2 <= x1 || y2 <= y1) {
@@ -390,23 +390,23 @@ inline float calculateIoU(const BOX_RECT &box1, const BOX_RECT &box2) {
 
     const float intersectionArea = static_cast<float>((x2 - x1) * (y2 - y1));
     const float area1 =
-        static_cast<float>((box1.right - box1.left) * (box1.bottom - box1.top));
+        static_cast<float>((box1.x2 - box1.x1) * (box1.y2 - box1.y1));
     const float area2 =
-        static_cast<float>((box2.right - box2.left) * (box2.bottom - box2.top));
+        static_cast<float>((box2.x2 - box2.x1) * (box2.y2 - box2.y1));
 
     return intersectionArea / (area1 + area2 - intersectionArea);
   }
 
   // OBB IoU using OpenCV
-  float w1 = static_cast<float>(box1.right - box1.left);
-  float h1 = static_cast<float>(box1.bottom - box1.top);
-  float cx1 = box1.left + w1 * 0.5f;
-  float cy1 = box1.top + h1 * 0.5f;
+  float w1 = static_cast<float>(box1.x2 - box1.x1);
+  float h1 = static_cast<float>(box1.y2 - box1.y1);
+  float cx1 = box1.x1 + w1 * 0.5f;
+  float cy1 = box1.y1 + h1 * 0.5f;
 
-  float w2 = static_cast<float>(box2.right - box2.left);
-  float h2 = static_cast<float>(box2.bottom - box2.top);
-  float cx2 = box2.left + w2 * 0.5f;
-  float cy2 = box2.top + h2 * 0.5f;
+  float w2 = static_cast<float>(box2.x2 - box2.x1);
+  float h2 = static_cast<float>(box2.y2 - box2.y1);
+  float cx2 = box2.x1 + w2 * 0.5f;
+  float cy2 = box2.y1 + h2 * 0.5f;
 
   cv::RotatedRect r1(cv::Point2f(cx1, cy1), cv::Size2f(w1, h1),
                      static_cast<float>(box1.angle));
@@ -600,10 +600,10 @@ jobjectArray yoloPostProcess(TfLiteInterpreter *interpreter, double boxThresh,
 #endif
 
     detect_result_t det;
-    det.box.left = static_cast<int>(std::round(clamped_x1));
-    det.box.top = static_cast<int>(std::round(clamped_y1));
-    det.box.right = static_cast<int>(std::round(clamped_x2));
-    det.box.bottom = static_cast<int>(std::round(clamped_y2));
+    det.box.x1 = static_cast<int>(std::round(clamped_x1));
+    det.box.y1 = static_cast<int>(std::round(clamped_y1));
+    det.box.x2 = static_cast<int>(std::round(clamped_x2));
+    det.box.y2 = static_cast<int>(std::round(clamped_y2));
     det.box.angle = 0.0;
     det.obj_conf = score;
     det.id = classId;
@@ -726,10 +726,10 @@ jobjectArray obbPostProcess(TfLiteInterpreter *interpreter, double boxThresh,
 #endif
 
     detect_result_t det;
-    det.box.left = static_cast<int>(std::round(clamped_x1));
-    det.box.top = static_cast<int>(std::round(clamped_y1));
-    det.box.right = static_cast<int>(std::round(clamped_x2));
-    det.box.bottom = static_cast<int>(std::round(clamped_y2));
+    det.box.x1 = static_cast<int>(std::round(clamped_x1));
+    det.box.y1 = static_cast<int>(std::round(clamped_y1));
+    det.box.x2 = static_cast<int>(std::round(clamped_x2));
+    det.box.y2 = static_cast<int>(std::round(clamped_y2));
     det.box.angle = angle_degrees;
     det.obj_conf = score;
     det.id = classId;
