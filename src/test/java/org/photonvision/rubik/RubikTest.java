@@ -45,7 +45,7 @@ public class RubikTest {
         System.out.println(Core.OpenCLApiCallError);
 
         System.out.println("Loading rubik_jni");
-        System.load("/home/ubuntu/rubik_jni/cmake_build/librubik_jni.so");
+        System.load("/home/photon/rubik_jni/cmake_build/librubik_jni.so");
 
         System.out.println("Loading bus");
         Mat img = Imgcodecs.imread("src/test/resources/bus.jpg");
@@ -57,7 +57,7 @@ public class RubikTest {
         System.out.println("Image loaded: " + img.size() + " " + img.type());
 
         System.out.println("Creating Rubik detector");
-        long ptr = RubikJNI.create("src/test/resources/yolov8nCoco.tflite", 0);
+        long ptr = RubikJNI.create("/home/photon/rubik_jni/src/test/resources/yolov8nCoco.tflite", 0);
 
         if (ptr == 0) {
             throw new RuntimeException("Failed to create Rubik detector");
@@ -153,7 +153,7 @@ public class RubikTest {
         System.out.println(Core.OpenCLApiCallError);
 
         System.out.println("Loading rubik_jni");
-        System.load("/home/ubuntu/rubik_jni/cmake_build/librubik_jni.so");
+        System.load("/home/photon/rubik_jni/cmake_build/librubik_jni.so");
 
         int numRuns = Integer.parseInt(System.getProperty("memLeakTestIterations"));
 
@@ -196,7 +196,7 @@ public class RubikTest {
         System.out.println(Core.OpenCLApiCallError);
 
         System.out.println("Loading rubik_jni");
-        System.load("/home/ubuntu/rubik_jni/cmake_build/librubik_jni.so");
+        System.load("/home/photon/rubik_jni/cmake_build/librubik_jni.so");
 
         System.out.println("Loading bus");
         Mat img = Imgcodecs.imread("src/test/resources/bus.jpg");
