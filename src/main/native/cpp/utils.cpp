@@ -15,83 +15,75 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "utils.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <iostream>
 #include <memory>
-#include <opencv2/imgproc.hpp>
-#include <opencv2/opencv.hpp>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
-#include "utils.hpp"
-
 #include <jni.h>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/opencv.hpp>
 #include <tensorflow/lite/c/c_api.h>
 
 // Helper function for proper dequantization like example.c
-float get_dequant_value(void *data, TfLiteType tensor_type,
-                                      int idx, float zero_point, float scale) {
+float get_dequant_value(void* data, TfLiteType tensor_type, int idx,
+                        float zero_point, float scale) {
   switch (tensor_type) {
-  case kTfLiteUInt8:
-    return (static_cast<uint8_t *>(data)[idx] - zero_point) * scale;
-  case kTfLiteFloat32:
-    return static_cast<float *>(data)[idx];
-  default:
-    break;
+    case kTfLiteUInt8:
+      return (static_cast<uint8_t*>(data)[idx] - zero_point) * scale;
+    case kTfLiteFloat32:
+      return static_cast<float*>(data)[idx];
+    default:
+      break;
   }
   return 0.0f;
 }
 
 // Guesses the width, height, and channels of a tensor if it were an image.
 // Returns false on failure.
-bool tensor_image_dims(const TfLiteTensor *tensor, int *w, int *h, int *c) {
+bool tensor_image_dims(const TfLiteTensor* tensor, int* w, int* h, int* c) {
   int n = TfLiteTensorNumDims(tensor);
   int cursor = 0;
 
   for (int i = 0; i < n; i++) {
     int dim = TfLiteTensorDim(tensor, i);
-    if (dim == 0)
-      return false;
-    if (dim == 1)
-      continue;
+    if (dim == 0) return false;
+    if (dim == 1) continue;
 
     switch (cursor++) {
-    case 0:
-      if (w)
-        *w = dim;
-      break;
-    case 1:
-      if (h)
-        *h = dim;
-      break;
-    case 2:
-      if (c)
-        *c = dim;
-      break;
-    default:
-      return false;
-      break;
+      case 0:
+        if (w) *w = dim;
+        break;
+      case 1:
+        if (h) *h = dim;
+        break;
+      case 2:
+        if (c) *c = dim;
+        break;
+      default:
+        return false;
+        break;
     }
   }
 
   // Ensure that we at least have the width and height.
-  if (cursor < 2)
-    return false;
+  if (cursor < 2) return false;
   // If we don't have the number of channels, then assume there's only one.
-  if (cursor == 2 && c)
-    *c = 1;
+  if (cursor == 2 && c) *c = 1;
   // Ensure we have no more than 4 image channels.
-  if (*c > 4)
-    return false;
+  if (*c > 4) return false;
   // The tensor dimension appears coherent.
   return true;
 }
 
 // Helper function to throw exceptions
-void ThrowRuntimeException(JNIEnv *env, const char *message) {
+void ThrowRuntimeException(JNIEnv* env, const char* message) {
   if (runtimeExceptionClass) {
     env->ThrowNew(runtimeExceptionClass, message);
   }
@@ -104,7 +96,7 @@ bool isOBB(int version) { return version == 3; }
 
 bool isPro(int version) { return version == 4; }
 
-static inline float calculateIoU(const BOX_RECT &box1, const BOX_RECT &box2) {
+static inline float calculateIoU(const BOX_RECT& box1, const BOX_RECT& box2) {
   // Optimization: If both angles are effectively zero, use faster AABB
   // calculation
   if (std::abs(box1.angle) < 0.1 && std::abs(box2.angle) < 0.1) {
@@ -155,42 +147,38 @@ static inline float calculateIoU(const BOX_RECT &box1, const BOX_RECT &box2) {
   float area2 = w2 * h2;
   float unionArea = area1 + area2 - intersectionArea;
 
-  if (unionArea <= 1e-5f)
-    return 0.0f;
+  if (unionArea <= 1e-5f) return 0.0f;
 
   return intersectionArea / unionArea;
 }
 
-std::vector<detect_result_t>
-optimizedNMS(std::vector<detect_result_t> &candidates, float nmsThreshold) {
-  if (candidates.empty())
-    return {};
+std::vector<detect_result_t> optimizedNMS(
+    std::vector<detect_result_t>& candidates, float nmsThreshold) {
+  if (candidates.empty()) return {};
 
   // Sort by confidence (descending) - single pass
   std::sort(candidates.begin(), candidates.end(),
-            [](const detect_result_t &a, const detect_result_t &b) {
+            [](const detect_result_t& a, const detect_result_t& b) {
               return a.obj_conf > b.obj_conf;
             });
 
   std::vector<detect_result_t> results;
-  results.reserve(candidates.size() / 4); // Reasonable initial capacity
+  results.reserve(candidates.size() / 4);  // Reasonable initial capacity
 
   // Use bitset for faster suppression tracking
   std::vector<bool> suppressed(candidates.size(), false);
 
   for (size_t i = 0; i < candidates.size(); ++i) {
-    if (suppressed[i])
-      continue;
+    if (suppressed[i]) continue;
 
     // Keep this detection
     results.push_back(candidates[i]);
-    const auto &currentBox = candidates[i];
+    const auto& currentBox = candidates[i];
 
     // Suppress overlapping boxes of the SAME class only
     // Start from i+1 since array is sorted by confidence
     for (size_t j = i + 1; j < candidates.size(); ++j) {
-      if (suppressed[j] || candidates[j].id != currentBox.id)
-        continue;
+      if (suppressed[j] || candidates[j].id != currentBox.id) continue;
 
       if (calculateIoU(currentBox.box, candidates[j].box) > nmsThreshold) {
         suppressed[j] = true;
