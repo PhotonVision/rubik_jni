@@ -36,6 +36,7 @@
 #include <tensorflow/lite/version.h>
 
 #include "obbPostProc.hpp"
+#include "proPostProc.hpp"
 #include "utils.hpp"
 #include "yoloPostProc.hpp"
 
@@ -134,8 +135,8 @@ Java_org_photonvision_rubik_RubikJNI_create
   }
 
   const int model_version = static_cast<int>(version);
-  // TODO: support 3 (obb) once that's merged in
-  if (!isYolo(model_version) && !isOBB(model_version)) {
+  if (!isYolo(model_version) && !isOBB(model_version) &&
+      !isPro(model_version)) {
     ThrowRuntimeException(env, "Unsupported YOLO version specified");
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
@@ -367,6 +368,8 @@ Java_org_photonvision_rubik_RubikJNI_detect
       results = yoloPostProc(interpreter, boxThresh, nmsThreshold, input_img);
     } else if (isOBB(version)) {
       results = obbPostProc(interpreter, boxThresh, nmsThreshold, input_img);
+    } else if (isPro(version)) {
+      results = proPostProc(interpreter, boxThresh, nmsThreshold, input_img);
     } else {
       ThrowRuntimeException(env, "Unsupported YOLO version specified");
       return nullptr;
