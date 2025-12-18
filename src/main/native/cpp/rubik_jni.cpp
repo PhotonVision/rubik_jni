@@ -54,69 +54,6 @@ typedef struct RubikDetector {
   int version;
 } RubikDetector;
 
-// Helper function for proper dequantization like example.c
-static inline float get_dequant_value(void *data, TfLiteType tensor_type,
-                                      int idx, float zero_point, float scale) {
-  switch (tensor_type) {
-  case kTfLiteUInt8:
-    return (static_cast<uint8_t *>(data)[idx] - zero_point) * scale;
-  case kTfLiteFloat32:
-    return static_cast<float *>(data)[idx];
-  default:
-    break;
-  }
-  return 0.0f;
-}
-
-// JNI class reference (this can be global since it's shared)
-static jclass detectionResultClass = nullptr;
-static jclass runtimeExceptionClass = nullptr;
-
-// Guesses the width, height, and channels of a tensor if it were an image.
-// Returns false on failure.
-bool tensor_image_dims(const TfLiteTensor *tensor, int *w, int *h, int *c) {
-  int n = TfLiteTensorNumDims(tensor);
-  int cursor = 0;
-
-  for (int i = 0; i < n; i++) {
-    int dim = TfLiteTensorDim(tensor, i);
-    if (dim == 0)
-      return false;
-    if (dim == 1)
-      continue;
-
-    switch (cursor++) {
-    case 0:
-      if (w)
-        *w = dim;
-      break;
-    case 1:
-      if (h)
-        *h = dim;
-      break;
-    case 2:
-      if (c)
-        *c = dim;
-      break;
-    default:
-      return false;
-      break;
-    }
-  }
-
-  // Ensure that we at least have the width and height.
-  if (cursor < 2)
-    return false;
-  // If we don't have the number of channels, then assume there's only one.
-  if (cursor == 2 && c)
-    *c = 1;
-  // Ensure we have no more than 4 image channels.
-  if (*c > 4)
-    return false;
-  // The tensor dimension appears coherent.
-  return true;
-}
-
 extern "C" {
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
   JNIEnv *env;
@@ -179,18 +116,6 @@ static jobject MakeJObject(JNIEnv *env, const detect_result_t &result) {
                         result.box.y1, result.box.x2, result.box.y2,
                         result.obj_conf, result.id, result.box.angle);
 }
-
-// Helper function to throw exceptions
-void ThrowRuntimeException(JNIEnv *env, const char *message) {
-  if (runtimeExceptionClass) {
-    env->ThrowNew(runtimeExceptionClass, message);
-  }
-}
-
-// Checks if a model is the basic yolo model
-bool isYolo(int version) { return version >= 1 && version <= 2; }
-
-bool isOBB(int version) { return version == 3; }
 
 /*
  * Class:     org_photonvision_rubik_RubikJNI

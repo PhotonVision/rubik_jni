@@ -17,7 +17,9 @@
 
 #pragma once
 
+#include <jni.h>
 #include <vector>
+#include <tensorflow/lite/c/c_api.h>
 
 typedef struct _BOX_RECT {
   int x1;
@@ -32,6 +34,61 @@ typedef struct __detect_result_t {
   BOX_RECT box;
   float obj_conf;
 } detect_result_t;
+
+static jclass runtimeExceptionClass = nullptr;
+
+// JNI class reference (this can be global since it's shared)
+static jclass detectionResultClass = nullptr;
+
+/**
+ * Gets the dequantized value from tensor data.
+ * @param data Pointer to the tensor data.
+ * @param tensor_type The type of the tensor.
+ * @param idx The index of the value to retrieve.
+ * @param zero_point The zero point for dequantization.
+ * @param scale The scale for dequantization.
+ * @return The dequantized float value.
+ */
+float get_dequant_value(void *data, TfLiteType tensor_type,
+                                      int idx, float zero_point, float scale);
+
+/**
+ * Infers the width, height, and channels of a tensor as if it were an image.
+ * @param tensor The TensorFlow Lite tensor.
+ * @param w Pointer to store the width.
+ * @param h Pointer to store the height.
+ * @param c Pointer to store the number of channels.
+ * @return True if the dimensions were successfully inferred, false otherwise.
+ */
+bool tensor_image_dims(const TfLiteTensor *tensor, int *w, int *h, int *c);
+
+/**
+ * Throws a Java RuntimeException with the given message.
+ * @param env The JNI environment.
+ * @param message The exception message.
+ */
+void ThrowRuntimeException(JNIEnv *env, const char *message);
+
+/**
+ * Checks if the given model version corresponds to a YOLO model.
+ * @param version The model version.
+ * @return True if it's a YOLO model, false otherwise.
+ */
+bool isYolo(int version);
+
+/**
+ * Checks if the given model version corresponds to an OBB model.
+ * @param version The model version.
+ * @return True if it's an OBB model, false otherwise.
+ */
+bool isOBB(int version);
+
+/**
+ * Checks if the given model corresponds to a pro model.
+ * @param version The model version.
+ * @return True if it's a pro model, false otherwise.
+ */
+bool isPro(int version);
 
 /**
  * Performs Non-Maximum Suppression (NMS) on a list of detection results.
