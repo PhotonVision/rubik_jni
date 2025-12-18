@@ -25,7 +25,8 @@ public class RubikJNI {
     /** A class representing the result of a detection. */
     public static class RubikResult {
         /**
-         * Create a RubikResult with the specified bounding box coordinates, confidence, class ID, and angle.
+         * Create a RubikResult with the specified bounding box coordinates, confidence, class ID, and
+         * angle.
          *
          * @param x1 The x coordinate of a vertex of the bounding box.
          * @param y1 The y coordinate of a vertex of the bounding box.
