@@ -17,8 +17,9 @@
 
 #pragma once
 
-#include <jni.h>
 #include <vector>
+
+#include <jni.h>
 #include <tensorflow/lite/c/c_api.h>
 
 typedef struct _BOX_RECT {
@@ -49,8 +50,8 @@ static jclass detectionResultClass = nullptr;
  * @param scale The scale for dequantization.
  * @return The dequantized float value.
  */
-float get_dequant_value(void *data, TfLiteType tensor_type,
-                                      int idx, float zero_point, float scale);
+float get_dequant_value(void* data, TfLiteType tensor_type, int idx,
+                        float zero_point, float scale);
 
 /**
  * Infers the width, height, and channels of a tensor as if it were an image.
@@ -60,14 +61,14 @@ float get_dequant_value(void *data, TfLiteType tensor_type,
  * @param c Pointer to store the number of channels.
  * @return True if the dimensions were successfully inferred, false otherwise.
  */
-bool tensor_image_dims(const TfLiteTensor *tensor, int *w, int *h, int *c);
+bool tensor_image_dims(const TfLiteTensor* tensor, int* w, int* h, int* c);
 
 /**
  * Throws a Java RuntimeException with the given message.
  * @param env The JNI environment.
  * @param message The exception message.
  */
-void ThrowRuntimeException(JNIEnv *env, const char *message);
+void ThrowRuntimeException(JNIEnv* env, const char* message);
 
 /**
  * Checks if the given model version corresponds to a YOLO model.
@@ -97,5 +98,5 @@ bool isPro(int version);
  * @param nmsThreshold The IoU threshold for suppression.
  * @return A vector of filtered detection results.
  */
-std::vector<detect_result_t>
-optimizedNMS(std::vector<detect_result_t> &candidates, float nmsThreshold);
+std::vector<detect_result_t> optimizedNMS(
+    std::vector<detect_result_t>& candidates, float nmsThreshold);
