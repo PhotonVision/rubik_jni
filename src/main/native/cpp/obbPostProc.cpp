@@ -83,7 +83,9 @@ std::vector<detect_result_t> obbPostProc(TfLiteInterpreter* interpreter,
     float score =
         get_dequant_value(outputData, kTfLiteUInt8, i * 7 + 4,
                           outputParams.zero_point, outputParams.scale);
-    if (score < boxThresh) continue;
+    if (score < boxThresh) {
+      continue;
+    }
 
     int classId = outputData[i * 7 + 5];
 
