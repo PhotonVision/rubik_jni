@@ -32,8 +32,8 @@ import org.opencv.imgproc.Imgproc;
 import org.photonvision.rubik.RubikJNI.RubikResult;
 
 public class RubikTest {
-    @Test
-    public void testBasicBlobs() {
+
+    public void testModel(String modelPath, String imagePath, int modelVersion) {
         try {
             CombinedRuntimeLoader.loadLibraries(RubikTest.class, Core.NATIVE_LIBRARY_NAME);
 
@@ -43,8 +43,8 @@ public class RubikTest {
             System.out.println("Loading rubik_jni");
             System.load("/home/photon/rubik_jni/cmake_build/librubik_jni.so");
 
-            System.out.println("Loading bus");
-            Mat img = Imgcodecs.imread("src/test/resources/bus.jpg");
+            System.out.println("Loading image: " + imagePath);
+            Mat img = Imgcodecs.imread(imagePath);
 
             if (img.empty()) {
                 throw new RuntimeException("Failed to load image");
@@ -53,7 +53,7 @@ public class RubikTest {
             System.out.println("Image loaded: " + img.size() + " " + img.type());
 
             System.out.println("Creating Rubik detector");
-            long ptr = RubikJNI.create("/home/photon/rubik_jni/src/test/resources/yolov8nCoco.tflite", 1);
+            long ptr = RubikJNI.create(modelPath, modelVersion);
 
             if (ptr == 0) {
                 throw new RuntimeException("Failed to create Rubik detector");
@@ -87,28 +87,23 @@ public class RubikTest {
                 for (int j = 0; j < 4; j++) {
                     Imgproc.line(img, rectPoints[j], rectPoints[(j + 1) % 4], color, 2, 8);
                 }
-
-                // Put label text
-                // Imgproc.putText(
-                //     img,
-                //     result.class_id + " " + String.format("%.2f", result.conf),
-                //     new Point(result.rect.x, result.rect.y - 10),
-                //     Imgproc.FONT_HERSHEY_SIMPLEX,
-                //     0.5, // Font scale
-                //     new Scalar(0, 255, 0), // Green color
-                //     1 // Thickness
-                // );
             }
 
             // Save the image with results
-            Imgcodecs.imwrite("src/test/resources/bus_with_results.jpg", img);
-            System.out.println("Results written to image and saved as bus_with_results.jpg");
+            Imgcodecs.imwrite(imagePath + "_with_results.jpg", img);
+            System.out.println(
+                    "Results written to image and saved as " + imagePath + "_with_results.jpg");
 
         } catch (IOException e) {
             // TODO Auto-generated catch block
             e.printStackTrace();
             System.out.println(e.toString());
         }
+    }
+
+    @Test
+    public void testYoloV8() {
+        testModel("src/test/resources/yolov8nCoco.tflite", "src/test/resources/bus.jpg", 1);
     }
 
     // Helper method to determine if the memory leak test should be enabled
