@@ -41,8 +41,8 @@ public class RubikJNI {
             this.class_id = class_id;
 
             // Calc size
-            double width = Math.hypot(x2 - x1, y2 - y1);
-            double height = Math.hypot(x2 - x1, y1 - y2);
+            double width = x2 - x1;
+            double height = y2 - y1;
             Size size = new org.opencv.core.Size(width, height);
 
             Point center = new Point((x1 + x2) / 2.0, (y1 + y2) / 2.0);
