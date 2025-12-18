@@ -36,7 +36,7 @@ public class RubikJNI {
          * @param angle The angle of the detected object in radians.
          * @param class_id The class ID of the detected object.
          */
-        public RubikResult(int x1, int y1, int x2, int y2, float conf, int class_id, double angle) {
+        public RubikResult(int x1, int y1, int x2, int y2, float conf, int class_id, float angle) {
             this.conf = conf;
             this.class_id = class_id;
 
@@ -48,20 +48,6 @@ public class RubikJNI {
             Point center = new Point((x1 + x2) / 2.0, (y1 + y2) / 2.0);
 
             this.rect = new RotatedRect(center, size, angle);
-        }
-
-        /**
-         * Create a RubikResult with the specified bounding box coordinates, confidence, and class ID.
-         *
-         * @param x1 The x coordinate of a vertex of the bounding box.
-         * @param y1 The y coordinate of a vertex of the bounding box.
-         * @param x2 The x coordinate of the opposite vertex of the bounding box.
-         * @param y2 The y coordinate of the opposite vertex of the bounding box.
-         * @param conf The confidence score of the detection.
-         * @param class_id The class ID of the detected object.
-         */
-        public RubikResult(int x1, int y1, int x2, int y2, float conf, int class_id) {
-            this(x1, y1, x2, y2, conf, class_id, 0.0);
         }
 
         public final RotatedRect rect;
@@ -102,7 +88,7 @@ public class RubikJNI {
      * Create a RubikJNI instance with the specified model path.
      *
      * @param modelPath Absolute path to the model file
-     * @param version The version of the model. yolov8=0, yolo11=1
+     * @param version The version of the model. yolov8=1, yolo11=2, OBB=3
      * @return A pointer to a struct with the tflite detector instance.
      */
     public static native long create(String modelPath, int version);
