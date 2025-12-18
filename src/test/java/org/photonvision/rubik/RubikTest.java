@@ -101,9 +101,20 @@ public class RubikTest {
         }
     }
 
+    // @Test
+    // public void testYoloV8() {
+    //     testModel("src/test/resources/yolov8nCoco.tflite", "src/test/resources/bus.jpg", 1);
+    // }
+
     @Test
-    public void testYoloV8() {
-        testModel("src/test/resources/yolov8nCoco.tflite", "src/test/resources/bus.jpg", 1);
+    public void testYoloPro() {
+        testModel(
+                "src/test/resources/ei-rubikpi-bird-object-detection-tensorflow-lite-int8-quantized-model.3.tflite",
+                "src/test/resources/bird.jpg",
+                4);
+        testModel("src/test/resources/ei-vehicle-detection-yolo-pro-object-detection-tensorflow-lite-int8-quantized-model.9.tflite",
+                "src/test/resources/bus.jpg",
+                4);
     }
 
     // Helper method to determine if the memory leak test should be enabled
