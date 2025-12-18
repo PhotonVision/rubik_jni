@@ -32,7 +32,6 @@ import org.opencv.imgproc.Imgproc;
 import org.photonvision.rubik.RubikJNI.RubikResult;
 
 public class RubikTest {
-
     public void testModel(String modelPath, String imagePath, int modelVersion) {
         try {
             CombinedRuntimeLoader.loadLibraries(RubikTest.class, Core.NATIVE_LIBRARY_NAME);
@@ -89,11 +88,12 @@ public class RubikTest {
                 }
             }
 
-            // Save the image with results
-            Imgcodecs.imwrite(imagePath + "_with_results.jpg", img);
-            System.out.println(
-                    "Results written to image and saved as " + imagePath + "_with_results.jpg");
+            String newImagePath =
+                    imagePath.substring(0, imagePath.lastIndexOf('.')) + "_with_results.jpg";
 
+            // Save the image with results
+            Imgcodecs.imwrite(newImagePath, img);
+            System.out.println("Results written to image and saved as " + newImagePath);
         } catch (IOException e) {
             // TODO Auto-generated catch block
             e.printStackTrace();
