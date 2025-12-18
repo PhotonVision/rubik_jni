@@ -89,7 +89,9 @@ public class RubikTest {
             Imgproc.rectangle(
                     img,
                     new Point(result.rect.center.x, result.rect.center.y),
-                    new Point(result.rect.center.x + result.rect.size.width, result.rect.center.y + result.rect.size.height),
+                    new Point(
+                            result.rect.center.x + result.rect.size.width,
+                            result.rect.center.y + result.rect.size.height),
                     color,
                     2 // Thickness
                     );
