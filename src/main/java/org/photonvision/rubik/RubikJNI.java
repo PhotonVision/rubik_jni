@@ -18,11 +18,37 @@
 package org.photonvision.rubik;
 
 import org.opencv.core.Point;
-import org.opencv.core.Rect2d;
+import org.opencv.core.RotatedRect;
+import org.opencv.core.Size;
 
 public class RubikJNI {
     /** A class representing the result of a detection. */
     public static class RubikResult {
+        /**
+         * Create a RubikResult with the specified bounding box coordinates, confidence, class ID, and angle.
+         *
+         * @param x1 The x coordinate of a vertex of the bounding box.
+         * @param y1 The y coordinate of a vertex of the bounding box.
+         * @param x2 The x coordinate of the opposite vertex of the bounding box.
+         * @param y2 The y coordinate of the opposite vertex of the bounding box.
+         * @param conf The confidence score of the detection.
+         * @param angle The angle of the detected object in radians.
+         * @param class_id The class ID of the detected object.
+         */
+        public RubikResult(int x1, int y1, int x2, int y2, float conf, int class_id, double angle) {
+            this.conf = conf;
+            this.class_id = class_id;
+
+            // Calc size
+            double width = Math.hypot(x2 - x1, y2 - y1);
+            double height = Math.hypot(x2 - x1, y1 - y2);
+            Size size = new org.opencv.core.Size(width, height);
+
+            Point center = new Point((x1 + x2) / 2.0, (y1 + y2) / 2.0);
+
+            this.rect = new RotatedRect(center, size, angle);
+        }
+
         /**
          * Create a RubikResult with the specified bounding box coordinates, confidence, and class ID.
          *
@@ -34,12 +60,10 @@ public class RubikJNI {
          * @param class_id The class ID of the detected object.
          */
         public RubikResult(int x1, int y1, int x2, int y2, float conf, int class_id) {
-            this.conf = conf;
-            this.class_id = class_id;
-            this.rect = new Rect2d(new Point(x1, y1), new Point(x2, y2));
+            this(x1, y1, x2, y2, conf, class_id, 0.0);
         }
 
-        public final Rect2d rect;
+        public final RotatedRect rect;
         public final float conf;
         public final int class_id;
 

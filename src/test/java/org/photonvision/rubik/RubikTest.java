@@ -88,8 +88,8 @@ public class RubikTest {
             // Draw bounding box on the image
             Imgproc.rectangle(
                     img,
-                    new Point(result.rect.x, result.rect.y),
-                    new Point(result.rect.x + result.rect.width, result.rect.y + result.rect.height),
+                    new Point(result.rect.center.x, result.rect.center.y),
+                    new Point(result.rect.center.x + result.rect.size.width, result.rect.center.y + result.rect.size.height),
                     color,
                     2 // Thickness
                     );

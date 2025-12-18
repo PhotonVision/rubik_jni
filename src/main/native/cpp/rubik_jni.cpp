@@ -50,6 +50,7 @@ typedef struct _BOX_RECT {
   int right;
   int top;
   int bottom;
+  double angle;
 } BOX_RECT;
 
 typedef struct RubikDetector {
@@ -199,9 +200,9 @@ void ThrowRuntimeException(JNIEnv *env, const char *message) {
 }
 
 // Checks if a model is the basic yolo model
-bool isYolo(int version) {
-  return version >= 1 && version <= 2;
-}
+bool isYolo(int version) { return version >= 1 && version <= 2; }
+
+bool isOBB(int version) { return version == 3; }
 
 /*
  * Class:     org_photonvision_rubik_RubikJNI
@@ -220,7 +221,7 @@ Java_org_photonvision_rubik_RubikJNI_create
 
   const int model_version = static_cast<int>(version);
   // TODO: support 3 (obb) once that's merged in
-  if (!isYolo(model_version)) {
+  if (!isYolo(model_version) && !isOBB(model_version)) {
     ThrowRuntimeException(env, "Unsupported YOLO version specified");
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
@@ -374,23 +375,60 @@ Java_org_photonvision_rubik_RubikJNI_destroy
 }
 
 inline float calculateIoU(const BOX_RECT &box1, const BOX_RECT &box2) {
-  // Calculate intersection coordinates
-  const int x1 = std::max(box1.left, box2.left);
-  const int y1 = std::max(box1.top, box2.top);
-  const int x2 = std::min(box1.right, box2.right);
-  const int y2 = std::min(box1.bottom, box2.bottom);
+  // Optimization: If both angles are effectively zero, use faster AABB
+  // calculation
+  if (std::abs(box1.angle) < 0.1 && std::abs(box2.angle) < 0.1) {
+    const int x1 = std::max(box1.left, box2.left);
+    const int y1 = std::max(box1.top, box2.top);
+    const int x2 = std::min(box1.right, box2.right);
+    const int y2 = std::min(box1.bottom, box2.bottom);
 
-  // No intersection case
-  if (x2 <= x1 || y2 <= y1)
+    // No intersection case
+    if (x2 <= x1 || y2 <= y1) {
+      return 0.0f;
+    }
+
+    const float intersectionArea = static_cast<float>((x2 - x1) * (y2 - y1));
+    const float area1 =
+        static_cast<float>((box1.right - box1.left) * (box1.bottom - box1.top));
+    const float area2 =
+        static_cast<float>((box2.right - box2.left) * (box2.bottom - box2.top));
+
+    return intersectionArea / (area1 + area2 - intersectionArea);
+  }
+
+  // OBB IoU using OpenCV
+  float w1 = static_cast<float>(box1.right - box1.left);
+  float h1 = static_cast<float>(box1.bottom - box1.top);
+  float cx1 = box1.left + w1 * 0.5f;
+  float cy1 = box1.top + h1 * 0.5f;
+
+  float w2 = static_cast<float>(box2.right - box2.left);
+  float h2 = static_cast<float>(box2.bottom - box2.top);
+  float cx2 = box2.left + w2 * 0.5f;
+  float cy2 = box2.top + h2 * 0.5f;
+
+  cv::RotatedRect r1(cv::Point2f(cx1, cy1), cv::Size2f(w1, h1),
+                     static_cast<float>(box1.angle));
+  cv::RotatedRect r2(cv::Point2f(cx2, cy2), cv::Size2f(w2, h2),
+                     static_cast<float>(box2.angle));
+
+  std::vector<cv::Point2f> intersectionPoints;
+  int res = cv::rotatedRectangleIntersection(r1, r2, intersectionPoints);
+
+  float intersectionArea = 0.0f;
+  if (res != cv::INTERSECT_NONE && !intersectionPoints.empty()) {
+    intersectionArea = static_cast<float>(cv::contourArea(intersectionPoints));
+  }
+
+  float area1 = w1 * h1;
+  float area2 = w2 * h2;
+  float unionArea = area1 + area2 - intersectionArea;
+
+  if (unionArea <= 1e-5f)
     return 0.0f;
 
-  // Calculate areas using pre-computed values when possible
-  const int intersectionArea = (x2 - x1) * (y2 - y1);
-  const int area1 = (box1.right - box1.left) * (box1.bottom - box1.top);
-  const int area2 = (box2.right - box2.left) * (box2.bottom - box2.top);
-
-  return static_cast<float>(intersectionArea) /
-         (area1 + area2 - intersectionArea);
+  return intersectionArea / unionArea;
 }
 
 std::vector<detect_result_t>
@@ -511,8 +549,9 @@ jobjectArray yoloPostProcess(TfLiteInterpreter *interpreter, double boxThresh,
     float score =
         get_dequant_value(scoresData, kTfLiteUInt8, i, scoresParams.zero_point,
                           scoresParams.scale);
-    if (score < boxThresh)
+    if (score < boxThresh) {
       continue;
+    }
 
     int classId = classesData[i];
 
@@ -565,6 +604,133 @@ jobjectArray yoloPostProcess(TfLiteInterpreter *interpreter, double boxThresh,
     det.box.top = static_cast<int>(std::round(clamped_y1));
     det.box.right = static_cast<int>(std::round(clamped_x2));
     det.box.bottom = static_cast<int>(std::round(clamped_y2));
+    det.box.angle = 0.0;
+    det.obj_conf = score;
+    det.id = classId;
+
+    candidateResults.push_back(det);
+  }
+
+  // NMS
+  std::vector<detect_result_t> results =
+      optimizedNMS(candidateResults, static_cast<float>(nmsThreshold));
+
+  jobjectArray jResults =
+      env->NewObjectArray(results.size(), detectionResultClass, nullptr);
+  for (size_t i = 0; i < results.size(); ++i) {
+    jobject jDet = MakeJObject(env, results[i]);
+    env->SetObjectArrayElement(jResults, i, jDet);
+  }
+
+  return jResults;
+}
+
+jobjectArray obbPostProcess(TfLiteInterpreter *interpreter, double boxThresh,
+                            double nmsThreshold, JNIEnv *env,
+                            cv::Mat *input_img) {
+  const TfLiteTensor *outputTensor =
+      TfLiteInterpreterGetOutputTensor(interpreter, 0);
+
+  const TfLiteQuantizationParams outputParams =
+      TfLiteTensorQuantizationParams(outputTensor);
+
+  const int numBoxes = TfLiteTensorDim(outputTensor, 1);
+  DEBUG_PRINT("INFO: Detected %d boxes\n", numBoxes);
+
+  // Debug tensor shapes
+  DEBUG_PRINT("DEBUG: Boxes tensor dimensions: ");
+#ifndef NDEBUG
+  for (int i = 0; i < TfLiteTensorNumDims(outputTensor); i++) {
+    std::printf("%d ", TfLiteTensorDim(outputTensor, i));
+  }
+  std::printf("\n");
+#endif
+
+  if (TfLiteTensorType(outputTensor) != kTfLiteUInt8) {
+    ThrowRuntimeException(env, "Expected uint8 tensor type");
+    return nullptr;
+  }
+
+  uint8_t *outputData = static_cast<uint8_t *>(TfLiteTensorData(outputTensor));
+
+  DEBUG_PRINT("DEBUG: Quantization params - output: zp=%d, scale=%f\n",
+              outputParams.zero_point, outputParams.scale);
+
+  std::vector<detect_result_t> candidateResults;
+
+  DEBUG_PRINT("DEBUG: Image dimensions: %dx%d\n", input_img->cols,
+              input_img->rows);
+
+  for (int i = 0; i < numBoxes; ++i) {
+    // Use proper dequantization for score
+    float score =
+        get_dequant_value(outputData, kTfLiteUInt8, i * 7 + 4,
+                          outputParams.zero_point, outputParams.scale);
+    if (score < boxThresh)
+      continue;
+
+    int classId = outputData[i * 7 + 5];
+
+    // For tensor shape [1, 8400, 4], use sequential indexing per detection
+    uint8_t raw_x_1_u8 = outputData[i * 7 + 0];
+    uint8_t raw_y_1_u8 = outputData[i * 7 + 1];
+    uint8_t raw_x_2_u8 = outputData[i * 7 + 2];
+    uint8_t raw_y_2_u8 = outputData[i * 7 + 3];
+
+    uint8_t raw_angle_u8 = outputData[i * 7 + 6];
+
+    // Use proper dequantization for bbox coordinates (like we do for scores)
+    float x1 = get_dequant_value(&raw_x_1_u8, kTfLiteUInt8, 0,
+                                 outputParams.zero_point, outputParams.scale);
+    float y1 = get_dequant_value(&raw_y_1_u8, kTfLiteUInt8, 0,
+                                 outputParams.zero_point, outputParams.scale);
+    float x2 = get_dequant_value(&raw_x_2_u8, kTfLiteUInt8, 0,
+                                 outputParams.zero_point, outputParams.scale);
+    float y2 = get_dequant_value(&raw_y_2_u8, kTfLiteUInt8, 0,
+                                 outputParams.zero_point, outputParams.scale);
+
+    float angle =
+        get_dequant_value(&raw_angle_u8, kTfLiteUInt8, 0,
+                          outputParams.zero_point, outputParams.scale);
+
+    float clamped_x1 =
+        std::max(0.0f, std::min(x1, static_cast<float>(input_img->cols)));
+    float clamped_y1 =
+        std::max(0.0f, std::min(y1, static_cast<float>(input_img->rows)));
+    float clamped_x2 =
+        std::max(0.0f, std::min(x2, static_cast<float>(input_img->cols)));
+    float clamped_y2 =
+        std::max(0.0f, std::min(y2, static_cast<float>(input_img->rows)));
+
+    float angle_degrees = angle * 180.0f / 3.14159265f;
+
+    // Skip bad boxes
+    if (clamped_x1 >= clamped_x2 || clamped_y1 >= clamped_y2) {
+      continue;
+    }
+
+#ifndef NDEBUG
+    if (candidateResults.size() < 5) {
+      std::printf(
+          " DEBUG: box %d - uint8 corners: (%d, %d) to (%d, %d), angle=%d\n", i,
+          raw_x_1_u8, raw_y_1_u8, raw_x_2_u8, raw_y_2_u8, raw_angle_u8);
+      std::printf("DEBUG: box %d - dequantized corners: (%.2f, %.2f) to (%.2f, "
+                  "%.2f), angle=%.2f\n",
+                  i, x1, y1, x2, y2, angle);
+      std::printf(
+          "DEBUG: box %d - clamped corners: (%.2f, %.2f) to (%.2f, %.2f), "
+          "score=%.3f, class=%d, angle=%.2f\n",
+          i, clamped_x1, clamped_y1, clamped_x2, clamped_y2, score, classId,
+          angle_degrees);
+    }
+#endif
+
+    detect_result_t det;
+    det.box.left = static_cast<int>(std::round(clamped_x1));
+    det.box.top = static_cast<int>(std::round(clamped_y1));
+    det.box.right = static_cast<int>(std::round(clamped_x2));
+    det.box.bottom = static_cast<int>(std::round(clamped_y2));
+    det.box.angle = angle_degrees;
     det.obj_conf = score;
     det.id = classId;
 
@@ -663,6 +829,8 @@ Java_org_photonvision_rubik_RubikJNI_detect
   if (isYolo(version)) {
     return yoloPostProcess(interpreter, boxThresh, nmsThreshold, env,
                            input_img);
+  } else if (isOBB(version)) {
+    return obbPostProcess(interpreter, boxThresh, nmsThreshold, env, input_img);
   }
 
   ThrowRuntimeException(
