@@ -19,12 +19,6 @@
  * NOTE INTELLISENSE WILL NOT WORK UNTIL THE PROJECT IS BUILT AT LEAST ONCE
  */
 
-#include <jni.h>
-#include <tensorflow/lite/c/c_api.h>
-#include <tensorflow/lite/c/c_api_experimental.h>
-#include <tensorflow/lite/delegates/external/external_delegate.h>
-#include <tensorflow/lite/version.h>
-
 #include <algorithm>
 #include <cstdio>
 #include <iostream>
@@ -33,31 +27,38 @@
 #include <utility>
 #include <vector>
 
+#include <jni.h>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/opencv.hpp>
+#include <tensorflow/lite/c/c_api.h>
+#include <tensorflow/lite/c/c_api_experimental.h>
+#include <tensorflow/lite/delegates/external/external_delegate.h>
+#include <tensorflow/lite/version.h>
 
+#include "obbPostProc.hpp"
 #include "utils.hpp"
+#include "yoloPostProc.hpp"
 
 // Debug print macro
 #ifndef NDEBUG
 #define DEBUG_PRINT(...) std::printf(__VA_ARGS__)
 #else
-#define DEBUG_PRINT(...)                                                       \
-  do {                                                                         \
+#define DEBUG_PRINT(...) \
+  do {                   \
   } while (0)
 #endif
 
 typedef struct RubikDetector {
-  TfLiteInterpreter *interpreter;
-  TfLiteDelegate *delegate;
-  TfLiteModel *model;
+  TfLiteInterpreter* interpreter;
+  TfLiteDelegate* delegate;
+  TfLiteModel* model;
   int version;
 } RubikDetector;
 
 extern "C" {
-JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
-  JNIEnv *env;
-  if (vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) != JNI_OK) {
+JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
+  JNIEnv* env;
+  if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
     return JNI_ERR;
   }
 
@@ -89,9 +90,9 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
   return JNI_VERSION_1_6;
 }
 
-JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved) {
-  JNIEnv *env;
-  if (vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) == JNI_OK) {
+JNIEXPORT void JNICALL JNI_OnUnload(JavaVM* vm, void* reserved) {
+  JNIEnv* env;
+  if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) == JNI_OK) {
     if (detectionResultClass) {
       env->DeleteGlobalRef(detectionResultClass);
       detectionResultClass = nullptr;
@@ -99,7 +100,7 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved) {
   }
 }
 
-static jobject MakeJObject(JNIEnv *env, const detect_result_t &result) {
+static jobject MakeJObject(JNIEnv* env, const detect_result_t& result) {
   if (!detectionResultClass) {
     std::printf("ERROR: detectionResultClass is null!\n");
     return nullptr;
@@ -124,9 +125,9 @@ static jobject MakeJObject(JNIEnv *env, const detect_result_t &result) {
  */
 JNIEXPORT jlong JNICALL
 Java_org_photonvision_rubik_RubikJNI_create
-  (JNIEnv *env, jobject obj, jstring modelPath, jint version)
+  (JNIEnv* env, jobject obj, jstring modelPath, jint version)
 {
-  const char *model_name = env->GetStringUTFChars(modelPath, nullptr);
+  const char* model_name = env->GetStringUTFChars(modelPath, nullptr);
   if (model_name == nullptr) {
     ThrowRuntimeException(env, "Failed to retrieve model path");
     return 0;
@@ -141,7 +142,7 @@ Java_org_photonvision_rubik_RubikJNI_create
   }
 
   // Load the model
-  TfLiteModel *model = TfLiteModelCreateFromFile(model_name);
+  TfLiteModel* model = TfLiteModelCreateFromFile(model_name);
   if (!model) {
     ThrowRuntimeException(env, "Failed to load model file");
     env->ReleaseStringUTFChars(modelPath, model_name);
@@ -156,7 +157,7 @@ Java_org_photonvision_rubik_RubikJNI_create
   TfLiteExternalDelegateOptions delegateOptsValue =
       TfLiteExternalDelegateOptionsDefault("libQnnTFLiteDelegate.so");
 
-  TfLiteExternalDelegateOptions *delegateOpts = &delegateOptsValue;
+  TfLiteExternalDelegateOptions* delegateOpts = &delegateOptsValue;
 
   // See
   // https://docs.qualcomm.com/bundle/publicresource/topics/80-70014-54/external-delegate-options-for-qnn-delegate.html
@@ -183,7 +184,7 @@ Java_org_photonvision_rubik_RubikJNI_create
   }
 
   // Create the delegate
-  TfLiteDelegate *delegate = TfLiteExternalDelegateCreate(delegateOpts);
+  TfLiteDelegate* delegate = TfLiteExternalDelegateCreate(delegateOpts);
 
   if (!delegate) {
     ThrowRuntimeException(env, "Failed to create external delegate");
@@ -196,7 +197,7 @@ Java_org_photonvision_rubik_RubikJNI_create
   DEBUG_PRINT("INFO: Loaded external delegate\n");
 
   // Create interpreter options
-  TfLiteInterpreterOptions *interpreterOpts = TfLiteInterpreterOptionsCreate();
+  TfLiteInterpreterOptions* interpreterOpts = TfLiteInterpreterOptionsCreate();
   if (!interpreterOpts) {
     ThrowRuntimeException(env, "Failed to create interpreter options");
     TfLiteExternalDelegateDelete(delegate);
@@ -207,7 +208,7 @@ Java_org_photonvision_rubik_RubikJNI_create
   TfLiteInterpreterOptionsAddDelegate(interpreterOpts, delegate);
 
   // Create the interpreter
-  TfLiteInterpreter *interpreter =
+  TfLiteInterpreter* interpreter =
       TfLiteInterpreterCreate(model, interpreterOpts);
   TfLiteInterpreterOptionsDelete(interpreterOpts);
 
@@ -242,7 +243,7 @@ Java_org_photonvision_rubik_RubikJNI_create
   env->ReleaseStringUTFChars(modelPath, model_name);
 
   // Create RubikDetector object
-  RubikDetector *detector = new RubikDetector;
+  RubikDetector* detector = new RubikDetector;
   detector->interpreter = interpreter;
   detector->delegate = delegate;
   detector->model = model;
@@ -263,9 +264,9 @@ Java_org_photonvision_rubik_RubikJNI_create
  */
 JNIEXPORT void JNICALL
 Java_org_photonvision_rubik_RubikJNI_destroy
-  (JNIEnv *env, jclass, jlong ptr)
+  (JNIEnv* env, jclass, jlong ptr)
 {
-  RubikDetector *detector = reinterpret_cast<RubikDetector *>(ptr);
+  RubikDetector* detector = reinterpret_cast<RubikDetector*>(ptr);
 
   if (!detector) {
     ThrowRuntimeException(env, "Invalid RubikDetector pointer");
@@ -273,298 +274,15 @@ Java_org_photonvision_rubik_RubikJNI_destroy
   }
 
   // Now safely use the pointers
-  if (detector->interpreter)
-    TfLiteInterpreterDelete(detector->interpreter);
-  if (detector->delegate)
-    TfLiteExternalDelegateDelete(detector->delegate);
-  if (detector->model)
-    TfLiteModelDelete(detector->model);
+  if (detector->interpreter) TfLiteInterpreterDelete(detector->interpreter);
+  if (detector->delegate) TfLiteExternalDelegateDelete(detector->delegate);
+  if (detector->model) TfLiteModelDelete(detector->model);
   // We don't need to delete the version since it's just an int not a pointer
 
   // Delete the RubikDetector object
   delete detector;
 
   DEBUG_PRINT("INFO: Object Detection instance destroyed successfully\n");
-}
-
-jobjectArray yoloPostProcess(TfLiteInterpreter *interpreter, double boxThresh,
-                             double nmsThreshold, JNIEnv *env,
-                             cv::Mat *input_img) {
-  const TfLiteTensor *boxesTensor =
-      TfLiteInterpreterGetOutputTensor(interpreter, 0);
-  const TfLiteTensor *scoresTensor =
-      TfLiteInterpreterGetOutputTensor(interpreter, 1);
-  const TfLiteTensor *classesTensor =
-      TfLiteInterpreterGetOutputTensor(interpreter, 2);
-
-  const TfLiteQuantizationParams boxesParams =
-      TfLiteTensorQuantizationParams(boxesTensor);
-  const TfLiteQuantizationParams scoresParams =
-      TfLiteTensorQuantizationParams(scoresTensor);
-
-  const int numBoxes = TfLiteTensorDim(boxesTensor, 1);
-  DEBUG_PRINT("INFO: Detected %d boxes\n", numBoxes);
-
-  // Debug tensor shapes
-  DEBUG_PRINT("DEBUG: Boxes tensor dimensions: ");
-#ifndef NDEBUG
-  for (int i = 0; i < TfLiteTensorNumDims(boxesTensor); i++) {
-    std::printf("%d ", TfLiteTensorDim(boxesTensor, i));
-  }
-  std::printf("\n");
-#endif
-
-  DEBUG_PRINT("DEBUG: Scores tensor dimensions: ");
-#ifndef NDEBUG
-  for (int i = 0; i < TfLiteTensorNumDims(scoresTensor); i++) {
-    std::printf("%d ", TfLiteTensorDim(scoresTensor, i));
-  }
-  std::printf("\n");
-#endif
-
-  DEBUG_PRINT("DEBUG: Classes tensor dimensions: ");
-#ifndef NDEBUG
-  for (int i = 0; i < TfLiteTensorNumDims(classesTensor); i++) {
-    std::printf("%d ", TfLiteTensorDim(classesTensor, i));
-  }
-  std::printf("\n");
-#endif
-
-  if (TfLiteTensorType(boxesTensor) != kTfLiteUInt8) {
-    ThrowRuntimeException(env, "Expected uint8 tensor type");
-    return nullptr;
-  }
-
-  if (TfLiteTensorType(scoresTensor) != kTfLiteUInt8) {
-    ThrowRuntimeException(env, "Expected uint8 tensor type");
-    return nullptr;
-  }
-
-  if (TfLiteTensorType(classesTensor) != kTfLiteUInt8) {
-    ThrowRuntimeException(env, "Expected uint8 tensor type");
-    return nullptr;
-  }
-
-  uint8_t *boxesData = static_cast<uint8_t *>(TfLiteTensorData(boxesTensor));
-  uint8_t *scoresData = static_cast<uint8_t *>(TfLiteTensorData(scoresTensor));
-  uint8_t *classesData =
-      static_cast<uint8_t *>(TfLiteTensorData(classesTensor));
-
-  DEBUG_PRINT("DEBUG: Quantization params - boxes: zp=%d, scale=%f\n",
-              boxesParams.zero_point, boxesParams.scale);
-  DEBUG_PRINT("DEBUG: Quantization params - scores: zp=%d, scale=%f\n",
-              scoresParams.zero_point, scoresParams.scale);
-
-  std::vector<detect_result_t> candidateResults;
-
-  DEBUG_PRINT("DEBUG: Image dimensions: %dx%d\n", input_img->cols,
-              input_img->rows);
-
-  for (int i = 0; i < numBoxes; ++i) {
-    // Use proper dequantization for score
-    float score =
-        get_dequant_value(scoresData, kTfLiteUInt8, i, scoresParams.zero_point,
-                          scoresParams.scale);
-    if (score < boxThresh) {
-      continue;
-    }
-
-    int classId = classesData[i];
-
-    // For tensor shape [1, 8400, 4], use sequential indexing per detection
-    uint8_t raw_x_1_u8 = boxesData[i * 4 + 0];
-    uint8_t raw_y_1_u8 = boxesData[i * 4 + 1];
-    uint8_t raw_x_2_u8 = boxesData[i * 4 + 2];
-    uint8_t raw_y_2_u8 = boxesData[i * 4 + 3];
-
-    // Use proper dequantization for bbox coordinates (like we do for scores)
-    float x1 = get_dequant_value(&raw_x_1_u8, kTfLiteUInt8, 0,
-                                 boxesParams.zero_point, boxesParams.scale);
-    float y1 = get_dequant_value(&raw_y_1_u8, kTfLiteUInt8, 0,
-                                 boxesParams.zero_point, boxesParams.scale);
-    float x2 = get_dequant_value(&raw_x_2_u8, kTfLiteUInt8, 0,
-                                 boxesParams.zero_point, boxesParams.scale);
-    float y2 = get_dequant_value(&raw_y_2_u8, kTfLiteUInt8, 0,
-                                 boxesParams.zero_point, boxesParams.scale);
-
-    float clamped_x1 =
-        std::max(0.0f, std::min(x1, static_cast<float>(input_img->cols)));
-    float clamped_y1 =
-        std::max(0.0f, std::min(y1, static_cast<float>(input_img->rows)));
-    float clamped_x2 =
-        std::max(0.0f, std::min(x2, static_cast<float>(input_img->cols)));
-    float clamped_y2 =
-        std::max(0.0f, std::min(y2, static_cast<float>(input_img->rows)));
-
-    // Skip bad boxes
-    if (clamped_x1 >= clamped_x2 || clamped_y1 >= clamped_y2) {
-      continue;
-    }
-
-#ifndef NDEBUG
-    if (candidateResults.size() < 5) {
-      std::printf(" DEBUG: box %d - uint8 corners: (%d, %d) to (%d, %d)\n", i,
-                  raw_x_1_u8, raw_y_1_u8, raw_x_2_u8, raw_y_2_u8);
-      std::printf(
-          "DEBUG: box %d - dequantized corners: (%.2f, %.2f) to (%.2f, %.2f)\n",
-          i, x1, y1, x2, y2);
-      std::printf(
-          "DEBUG: box %d - clamped corners: (%.2f, %.2f) to (%.2f, %.2f), "
-          "score=%.3f, class=%d\n",
-          i, clamped_x1, clamped_y1, clamped_x2, clamped_y2, score, classId);
-    }
-#endif
-
-    detect_result_t det;
-    det.box.x1 = static_cast<int>(std::round(clamped_x1));
-    det.box.y1 = static_cast<int>(std::round(clamped_y1));
-    det.box.x2 = static_cast<int>(std::round(clamped_x2));
-    det.box.y2 = static_cast<int>(std::round(clamped_y2));
-    det.box.angle = 0.0;
-    det.obj_conf = score;
-    det.id = classId;
-
-    candidateResults.push_back(det);
-  }
-
-  // NMS
-  std::vector<detect_result_t> results =
-      optimizedNMS(candidateResults, static_cast<float>(nmsThreshold));
-
-  jobjectArray jResults =
-      env->NewObjectArray(results.size(), detectionResultClass, nullptr);
-  for (size_t i = 0; i < results.size(); ++i) {
-    jobject jDet = MakeJObject(env, results[i]);
-    env->SetObjectArrayElement(jResults, i, jDet);
-  }
-
-  return jResults;
-}
-
-jobjectArray obbPostProcess(TfLiteInterpreter *interpreter, double boxThresh,
-                            double nmsThreshold, JNIEnv *env,
-                            cv::Mat *input_img) {
-  const TfLiteTensor *outputTensor =
-      TfLiteInterpreterGetOutputTensor(interpreter, 0);
-
-  const TfLiteQuantizationParams outputParams =
-      TfLiteTensorQuantizationParams(outputTensor);
-
-  const int numBoxes = TfLiteTensorDim(outputTensor, 1);
-  DEBUG_PRINT("INFO: Detected %d boxes\n", numBoxes);
-
-  // Debug tensor shapes
-  DEBUG_PRINT("DEBUG: Boxes tensor dimensions: ");
-#ifndef NDEBUG
-  for (int i = 0; i < TfLiteTensorNumDims(outputTensor); i++) {
-    std::printf("%d ", TfLiteTensorDim(outputTensor, i));
-  }
-  std::printf("\n");
-#endif
-
-  if (TfLiteTensorType(outputTensor) != kTfLiteUInt8) {
-    ThrowRuntimeException(env, "Expected uint8 tensor type");
-    return nullptr;
-  }
-
-  uint8_t *outputData = static_cast<uint8_t *>(TfLiteTensorData(outputTensor));
-
-  DEBUG_PRINT("DEBUG: Quantization params - output: zp=%d, scale=%f\n",
-              outputParams.zero_point, outputParams.scale);
-
-  std::vector<detect_result_t> candidateResults;
-
-  DEBUG_PRINT("DEBUG: Image dimensions: %dx%d\n", input_img->cols,
-              input_img->rows);
-
-  for (int i = 0; i < numBoxes; ++i) {
-    // Use proper dequantization for score
-    float score =
-        get_dequant_value(outputData, kTfLiteUInt8, i * 7 + 4,
-                          outputParams.zero_point, outputParams.scale);
-    if (score < boxThresh)
-      continue;
-
-    int classId = outputData[i * 7 + 5];
-
-    // For tensor shape [1, 8400, 4], use sequential indexing per detection
-    uint8_t raw_x_1_u8 = outputData[i * 7 + 0];
-    uint8_t raw_y_1_u8 = outputData[i * 7 + 1];
-    uint8_t raw_x_2_u8 = outputData[i * 7 + 2];
-    uint8_t raw_y_2_u8 = outputData[i * 7 + 3];
-
-    uint8_t raw_angle_u8 = outputData[i * 7 + 6];
-
-    // Use proper dequantization for bbox coordinates (like we do for scores)
-    float x1 = get_dequant_value(&raw_x_1_u8, kTfLiteUInt8, 0,
-                                 outputParams.zero_point, outputParams.scale);
-    float y1 = get_dequant_value(&raw_y_1_u8, kTfLiteUInt8, 0,
-                                 outputParams.zero_point, outputParams.scale);
-    float x2 = get_dequant_value(&raw_x_2_u8, kTfLiteUInt8, 0,
-                                 outputParams.zero_point, outputParams.scale);
-    float y2 = get_dequant_value(&raw_y_2_u8, kTfLiteUInt8, 0,
-                                 outputParams.zero_point, outputParams.scale);
-
-    float angle =
-        get_dequant_value(&raw_angle_u8, kTfLiteUInt8, 0,
-                          outputParams.zero_point, outputParams.scale);
-
-    float clamped_x1 =
-        std::max(0.0f, std::min(x1, static_cast<float>(input_img->cols)));
-    float clamped_y1 =
-        std::max(0.0f, std::min(y1, static_cast<float>(input_img->rows)));
-    float clamped_x2 =
-        std::max(0.0f, std::min(x2, static_cast<float>(input_img->cols)));
-    float clamped_y2 =
-        std::max(0.0f, std::min(y2, static_cast<float>(input_img->rows)));
-
-    float angle_degrees = angle * 180.0f / 3.14159265f;
-
-    // Skip bad boxes
-    if (clamped_x1 >= clamped_x2 || clamped_y1 >= clamped_y2) {
-      continue;
-    }
-
-#ifndef NDEBUG
-    if (candidateResults.size() < 5) {
-      std::printf(
-          " DEBUG: box %d - uint8 corners: (%d, %d) to (%d, %d), angle=%d\n", i,
-          raw_x_1_u8, raw_y_1_u8, raw_x_2_u8, raw_y_2_u8, raw_angle_u8);
-      std::printf("DEBUG: box %d - dequantized corners: (%.2f, %.2f) to (%.2f, "
-                  "%.2f), angle=%.2f\n",
-                  i, x1, y1, x2, y2, angle);
-      std::printf(
-          "DEBUG: box %d - clamped corners: (%.2f, %.2f) to (%.2f, %.2f), "
-          "score=%.3f, class=%d, angle=%.2f\n",
-          i, clamped_x1, clamped_y1, clamped_x2, clamped_y2, score, classId,
-          angle_degrees);
-    }
-#endif
-
-    detect_result_t det;
-    det.box.x1 = static_cast<int>(std::round(clamped_x1));
-    det.box.y1 = static_cast<int>(std::round(clamped_y1));
-    det.box.x2 = static_cast<int>(std::round(clamped_x2));
-    det.box.y2 = static_cast<int>(std::round(clamped_y2));
-    det.box.angle = angle_degrees;
-    det.obj_conf = score;
-    det.id = classId;
-
-    candidateResults.push_back(det);
-  }
-
-  // NMS
-  std::vector<detect_result_t> results =
-      optimizedNMS(candidateResults, static_cast<float>(nmsThreshold));
-
-  jobjectArray jResults =
-      env->NewObjectArray(results.size(), detectionResultClass, nullptr);
-  for (size_t i = 0; i < results.size(); ++i) {
-    jobject jDet = MakeJObject(env, results[i]);
-    env->SetObjectArrayElement(jResults, i, jDet);
-  }
-
-  return jResults;
 }
 
 /*
@@ -574,10 +292,10 @@ jobjectArray obbPostProcess(TfLiteInterpreter *interpreter, double boxThresh,
  */
 JNIEXPORT jobjectArray JNICALL
 Java_org_photonvision_rubik_RubikJNI_detect
-  (JNIEnv *env, jobject obj, jlong ptr, jlong input_cvmat_ptr,
+  (JNIEnv* env, jobject obj, jlong ptr, jlong input_cvmat_ptr,
    jdouble boxThresh, jdouble nmsThreshold)
 {
-  RubikDetector *detector = reinterpret_cast<RubikDetector *>(ptr);
+  RubikDetector* detector = reinterpret_cast<RubikDetector*>(ptr);
 
   if (!detector) {
     ThrowRuntimeException(env, "Invalid RubikDetector pointer");
@@ -591,20 +309,20 @@ Java_org_photonvision_rubik_RubikJNI_detect
     return nullptr;
   }
 
-  TfLiteInterpreter *interpreter = detector->interpreter;
+  TfLiteInterpreter* interpreter = detector->interpreter;
   if (!interpreter) {
     ThrowRuntimeException(env, "Invalid interpreter handle");
     return nullptr;
   }
 
-  TfLiteTensor *input = TfLiteInterpreterGetInputTensor(interpreter, 0);
+  TfLiteTensor* input = TfLiteInterpreterGetInputTensor(interpreter, 0);
   int in_w, in_h, in_c;
   if (!tensor_image_dims(input, &in_w, &in_h, &in_c)) {
     ThrowRuntimeException(env, "Invalid input tensor shape");
     return nullptr;
   }
 
-  cv::Mat *input_img = reinterpret_cast<cv::Mat *>(input_cvmat_ptr);
+  cv::Mat* input_img = reinterpret_cast<cv::Mat*>(input_cvmat_ptr);
   if (!input_img || input_img->empty() || input_img->cols != in_w ||
       input_img->rows != in_h) {
     ThrowRuntimeException(env, "Invalid input image or mismatched dimensions");
@@ -624,7 +342,7 @@ Java_org_photonvision_rubik_RubikJNI_detect
 // Start timer for benchmark
 #ifndef NDEBUG
   struct timespec start, end;
-  clock_gettime(CLOCK_MONOTONIC, &start); // Start timing
+  clock_gettime(CLOCK_MONOTONIC, &start);  // Start timing
 #endif
 
   if (TfLiteInterpreterInvoke(interpreter) != kTfLiteOk) {
@@ -633,7 +351,7 @@ Java_org_photonvision_rubik_RubikJNI_detect
   }
 
 #ifndef NDEBUG
-  clock_gettime(CLOCK_MONOTONIC, &end); // End timing
+  clock_gettime(CLOCK_MONOTONIC, &end);  // End timing
 
   // Calculate elapsed time in milliseconds
   double elapsed_time = (end.tv_sec - start.tv_sec) * 1000.0 +
@@ -642,18 +360,30 @@ Java_org_photonvision_rubik_RubikJNI_detect
   DEBUG_PRINT("INFO: Model execution time: %.2f ms\n", elapsed_time);
 #endif
 
-  if (isYolo(version)) {
-    return yoloPostProcess(interpreter, boxThresh, nmsThreshold, env,
-                           input_img);
-  } else if (isOBB(version)) {
-    return obbPostProcess(interpreter, boxThresh, nmsThreshold, env, input_img);
-  }
+  std::vector<detect_result_t> results;
 
-  ThrowRuntimeException(
-      env,
-      "Unsupported YOLO version specified. Actually though, this should be "
-      "uncreachable. How'd you get here? Go open a ticket or something.");
-  return nullptr;
+  try {
+    if (isYolo(version)) {
+      results = yoloPostProc(interpreter, boxThresh, nmsThreshold, input_img);
+    } else if (isOBB(version)) {
+      results = obbPostProc(interpreter, boxThresh, nmsThreshold, input_img);
+    } else {
+      ThrowRuntimeException(env, "Unsupported YOLO version specified");
+      return nullptr;
+    }
+
+    jobjectArray jResults =
+        env->NewObjectArray(results.size(), detectionResultClass, nullptr);
+    for (size_t i = 0; i < results.size(); ++i) {
+      jobject jDet = MakeJObject(env, results[i]);
+      env->SetObjectArrayElement(jResults, i, jDet);
+    }
+
+    return jResults;
+  } catch (const std::runtime_error& e) {
+    ThrowRuntimeException(env, e.what());
+    return nullptr;
+  }
 }
 
 /*
@@ -663,9 +393,9 @@ Java_org_photonvision_rubik_RubikJNI_detect
  */
 JNIEXPORT jboolean JNICALL
 Java_org_photonvision_rubik_RubikJNI_isQuantized
-  (JNIEnv *env, jobject obj, jlong ptr)
+  (JNIEnv* env, jobject obj, jlong ptr)
 {
-  RubikDetector *detector = reinterpret_cast<RubikDetector *>(ptr);
+  RubikDetector* detector = reinterpret_cast<RubikDetector*>(ptr);
 
   if (!detector) {
     ThrowRuntimeException(env, "Invalid RubikDetector pointer");
@@ -677,7 +407,7 @@ Java_org_photonvision_rubik_RubikJNI_isQuantized
     return JNI_FALSE;
   }
 
-  TfLiteInterpreter *interpreter = detector->interpreter;
+  TfLiteInterpreter* interpreter = detector->interpreter;
 
   if (!interpreter) {
     ThrowRuntimeException(env, "Invalid interpreter handle");
@@ -685,7 +415,7 @@ Java_org_photonvision_rubik_RubikJNI_isQuantized
   }
 
   // Check if the input tensor is quantized
-  TfLiteTensor *input = TfLiteInterpreterGetInputTensor(interpreter, 0);
+  TfLiteTensor* input = TfLiteInterpreterGetInputTensor(interpreter, 0);
   if (!input) {
     ThrowRuntimeException(env, "Failed to get input tensor");
     return JNI_FALSE;
@@ -696,10 +426,10 @@ Java_org_photonvision_rubik_RubikJNI_isQuantized
 
   if (tensorType == kTfLiteUInt8) {
     DEBUG_PRINT("INFO: Input tensor is quantized\n");
-    return JNI_TRUE; // The model is quantized
+    return JNI_TRUE;  // The model is quantized
   } else {
     DEBUG_PRINT("INFO: Input tensor is not quantized\n");
-    return JNI_FALSE; // The model is not quantized
+    return JNI_FALSE;  // The model is not quantized
   }
 }
-} // extern "C"
+}  // extern "C"

@@ -95,6 +95,8 @@ add_library(
     ${PROJECT_NAME}
     src/main/native/cpp/rubik_jni.cpp
     src/main/native/cpp/utils.cpp
+    src/main/native/cpp/yoloPostProc.cpp
+    src/main/native/cpp/obbPostProc.cpp
 )
 
 target_link_libraries(
