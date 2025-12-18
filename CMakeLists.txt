@@ -91,7 +91,11 @@ endif()
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
-add_library(${PROJECT_NAME} src/main/native/cpp/rubik_jni.cpp)
+add_library(
+    ${PROJECT_NAME}
+    src/main/native/cpp/rubik_jni.cpp
+    src/main/native/cpp/utils.cpp
+)
 
 target_link_libraries(
     ${PROJECT_NAME}

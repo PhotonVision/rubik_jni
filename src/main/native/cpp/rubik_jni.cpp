@@ -36,6 +36,8 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/opencv.hpp>
 
+#include "utils.hpp"
+
 // Debug print macro
 #ifndef NDEBUG
 #define DEBUG_PRINT(...) std::printf(__VA_ARGS__)
@@ -45,26 +47,12 @@
   } while (0)
 #endif
 
-typedef struct _BOX_RECT {
-  int x1;
-  int x2;
-  int y1;
-  int y2;
-  double angle;
-} BOX_RECT;
-
 typedef struct RubikDetector {
   TfLiteInterpreter *interpreter;
   TfLiteDelegate *delegate;
   TfLiteModel *model;
   int version;
 } RubikDetector;
-
-typedef struct __detect_result_t {
-  int id;
-  BOX_RECT box;
-  float obj_conf;
-} detect_result_t;
 
 // Helper function for proper dequantization like example.c
 static inline float get_dequant_value(void *data, TfLiteType tensor_type,
@@ -372,103 +360,6 @@ Java_org_photonvision_rubik_RubikJNI_destroy
   delete detector;
 
   DEBUG_PRINT("INFO: Object Detection instance destroyed successfully\n");
-}
-
-inline float calculateIoU(const BOX_RECT &box1, const BOX_RECT &box2) {
-  // Optimization: If both angles are effectively zero, use faster AABB
-  // calculation
-  if (std::abs(box1.angle) < 0.1 && std::abs(box2.angle) < 0.1) {
-    const int x1 = std::max(box1.x1, box2.x1);
-    const int y1 = std::max(box1.y1, box2.y1);
-    const int x2 = std::min(box1.x2, box2.x2);
-    const int y2 = std::min(box1.y2, box2.y2);
-
-    // No intersection case
-    if (x2 <= x1 || y2 <= y1) {
-      return 0.0f;
-    }
-
-    const float intersectionArea = static_cast<float>((x2 - x1) * (y2 - y1));
-    const float area1 =
-        static_cast<float>((box1.x2 - box1.x1) * (box1.y2 - box1.y1));
-    const float area2 =
-        static_cast<float>((box2.x2 - box2.x1) * (box2.y2 - box2.y1));
-
-    return intersectionArea / (area1 + area2 - intersectionArea);
-  }
-
-  // OBB IoU using OpenCV
-  float w1 = static_cast<float>(box1.x2 - box1.x1);
-  float h1 = static_cast<float>(box1.y2 - box1.y1);
-  float cx1 = box1.x1 + w1 * 0.5f;
-  float cy1 = box1.y1 + h1 * 0.5f;
-
-  float w2 = static_cast<float>(box2.x2 - box2.x1);
-  float h2 = static_cast<float>(box2.y2 - box2.y1);
-  float cx2 = box2.x1 + w2 * 0.5f;
-  float cy2 = box2.y1 + h2 * 0.5f;
-
-  cv::RotatedRect r1(cv::Point2f(cx1, cy1), cv::Size2f(w1, h1),
-                     static_cast<float>(box1.angle));
-  cv::RotatedRect r2(cv::Point2f(cx2, cy2), cv::Size2f(w2, h2),
-                     static_cast<float>(box2.angle));
-
-  std::vector<cv::Point2f> intersectionPoints;
-  int res = cv::rotatedRectangleIntersection(r1, r2, intersectionPoints);
-
-  float intersectionArea = 0.0f;
-  if (res != cv::INTERSECT_NONE && !intersectionPoints.empty()) {
-    intersectionArea = static_cast<float>(cv::contourArea(intersectionPoints));
-  }
-
-  float area1 = w1 * h1;
-  float area2 = w2 * h2;
-  float unionArea = area1 + area2 - intersectionArea;
-
-  if (unionArea <= 1e-5f)
-    return 0.0f;
-
-  return intersectionArea / unionArea;
-}
-
-std::vector<detect_result_t>
-optimizedNMS(std::vector<detect_result_t> &candidates, float nmsThreshold) {
-  if (candidates.empty())
-    return {};
-
-  // Sort by confidence (descending) - single pass
-  std::sort(candidates.begin(), candidates.end(),
-            [](const detect_result_t &a, const detect_result_t &b) {
-              return a.obj_conf > b.obj_conf;
-            });
-
-  std::vector<detect_result_t> results;
-  results.reserve(candidates.size() / 4); // Reasonable initial capacity
-
-  // Use bitset for faster suppression tracking
-  std::vector<bool> suppressed(candidates.size(), false);
-
-  for (size_t i = 0; i < candidates.size(); ++i) {
-    if (suppressed[i])
-      continue;
-
-    // Keep this detection
-    results.push_back(candidates[i]);
-    const auto &currentBox = candidates[i];
-
-    // Suppress overlapping boxes of the SAME class only
-    // Start from i+1 since array is sorted by confidence
-    for (size_t j = i + 1; j < candidates.size(); ++j) {
-      if (suppressed[j] || candidates[j].id != currentBox.id)
-        continue;
-
-      if (calculateIoU(currentBox.box, candidates[j].box) > nmsThreshold) {
-        suppressed[j] = true;
-      }
-    }
-  }
-
-  return results;
 }
 
 jobjectArray yoloPostProcess(TfLiteInterpreter *interpreter, double boxThresh,
