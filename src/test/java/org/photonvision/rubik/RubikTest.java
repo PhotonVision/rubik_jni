@@ -206,7 +206,7 @@ public class RubikTest {
         System.out.println("Image loaded: " + img.size() + " " + img.type());
 
         System.out.println("Creating Rubik detector");
-        long ptr = RubikJNI.create("src/test/resources/yolov8nCoco.tflite", 0);
+        long ptr = RubikJNI.create("src/test/resources/yolov8nCoco.tflite", 1);
 
         if (ptr == 0) {
             throw new RuntimeException("Failed to create Rubik detector");
