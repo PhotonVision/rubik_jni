@@ -101,10 +101,10 @@ public class RubikTest {
         }
     }
 
-    // @Test
-    // public void testYoloV8() {
-    //     testModel("src/test/resources/yolov8nCoco.tflite", "src/test/resources/bus.jpg", 1);
-    // }
+    @Test
+    public void testYoloV8() {
+        testModel("src/test/resources/yolov8nCoco.tflite", "src/test/resources/bus.jpg", 1);
+    }
 
     @Test
     public void testYoloPro() {
@@ -114,7 +114,7 @@ public class RubikTest {
                 4);
         testModel(
                 "src/test/resources/ei-vehicle-detection-yolo-pro-object-detection-tensorflow-lite-int8-quantized-model.9.tflite",
-                "src/test/resources/bus.jpg",
+                "src/test/resources/bus_320.jpg",
                 4);
     }
 
