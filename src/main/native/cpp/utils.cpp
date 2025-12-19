@@ -39,6 +39,8 @@ float get_dequant_value(void* data, TfLiteType tensor_type, int idx,
       return (static_cast<uint8_t*>(data)[idx] - zero_point) * scale;
     case kTfLiteFloat32:
       return static_cast<float*>(data)[idx];
+    case kTfLiteInt8:
+      return (static_cast<int8_t*>(data)[idx] - zero_point) * scale;
     default:
       break;
   }
