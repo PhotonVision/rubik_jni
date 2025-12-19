@@ -61,7 +61,8 @@ class columns).
 
 std::vector<detect_result_t> proPostProc(TfLiteInterpreter* interpreter,
                                          double boxThresh, double nmsThreshold,
-                                         cv::Mat* input_img) {
+                                         int input_img_width,
+                                         int input_img_height) {
   const TfLiteTensor* outputTensor =
       TfLiteInterpreterGetOutputTensor(interpreter, 0);
 
@@ -94,8 +95,8 @@ std::vector<detect_result_t> proPostProc(TfLiteInterpreter* interpreter,
 
   std::vector<detect_result_t> candidateResults;
 
-  DEBUG_PRINT("DEBUG: Image dimensions: %dx%d\n", input_img->cols,
-              input_img->rows);
+  DEBUG_PRINT("DEBUG: Image dimensions: %dx%d\n", input_img_width,
+              input_img_height);
 
   for (int i = 0; i < numBoxes; ++i) {
     // Use proper dequantization for score
@@ -142,19 +143,19 @@ std::vector<detect_result_t> proPostProc(TfLiteInterpreter* interpreter,
     float y2 = get_dequant_value(&raw_y_2_i8, kTfLiteInt8, 0,
                                  outputParams.zero_point, outputParams.scale);
 
-    float normal_x1 = x1 * input_img->cols;
-    float normal_y1 = y1 * input_img->rows;
-    float normal_x2 = x2 * input_img->cols;
-    float normal_y2 = y2 * input_img->rows;
+    float normal_x1 = x1 * input_img_width;
+    float normal_y1 = y1 * input_img_height;
+    float normal_x2 = x2 * input_img_width;
+    float normal_y2 = y2 * input_img_height;
 
     float clamped_x1 = std::max(
-        0.0f, std::min(normal_x1, static_cast<float>(input_img->cols)));
+        0.0f, std::min(normal_x1, static_cast<float>(input_img_width)));
     float clamped_y1 = std::max(
-        0.0f, std::min(normal_y1, static_cast<float>(input_img->rows)));
+        0.0f, std::min(normal_y1, static_cast<float>(input_img_height)));
     float clamped_x2 = std::max(
-        0.0f, std::min(normal_x2, static_cast<float>(input_img->cols)));
+        0.0f, std::min(normal_x2, static_cast<float>(input_img_width)));
     float clamped_y2 = std::max(
-        0.0f, std::min(normal_y2, static_cast<float>(input_img->rows)));
+        0.0f, std::min(normal_y2, static_cast<float>(input_img_height)));
     // Skip bad boxes
     if (clamped_x1 >= clamped_x2 || clamped_y1 >= clamped_y2) {
       continue;
