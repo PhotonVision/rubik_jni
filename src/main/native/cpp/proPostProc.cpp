@@ -97,31 +97,32 @@ std::vector<detect_result_t> proPostProc(TfLiteInterpreter* interpreter,
 
   DEBUG_PRINT("DEBUG: Image dimensions: %dx%d\n", input_img_width,
               input_img_height);
-
+  int checked = 0;
   for (int i = 0; i < numBoxes; ++i) {
-    // Use proper dequantization for score
-    float score =
-        get_dequant_value(outputData, kTfLiteInt8, i * numPoints + 4,
-                          outputParams.zero_point, outputParams.scale);
-    if (score < boxThresh) {
-      continue;
-    }
-
     int classId = -1;
-    float maxClassScore = -1.0f;
+    float score = -1.0f;
     // Find the class with the highest score
 
-    for (int i = 5; i < numPoints; ++i) {
+    for (int j = 4; j < numPoints; ++j) {
+      int8_t raw_class_score = outputData[j + (numPoints * i)];
+
       float classScore =
-          get_dequant_value(outputData, kTfLiteInt8, i + (numPoints * i),
+          get_dequant_value(&raw_class_score, kTfLiteInt8, 0,
                             outputParams.zero_point, outputParams.scale);
-      if (classScore > maxClassScore) {
-        maxClassScore = classScore;
-        classId = i - 5;
+      if (classScore > score) {
+        score = classScore;
+        classId = j - 4;
+      }
+
+      if (checked <= 5) {
+        DEBUG_PRINT(
+            "DEBUG: Box %d - class %d score: %.3f classScore %.3f raw %d\n", i,
+            classId, score, classScore, raw_class_score);
       }
     }
 
-    score = maxClassScore * score;  // Combine objectness and class score
+    checked++;
+
     if (score < boxThresh) {
       continue;
     }
