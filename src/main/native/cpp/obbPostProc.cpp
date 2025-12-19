@@ -45,7 +45,8 @@
 
 std::vector<detect_result_t> obbPostProc(TfLiteInterpreter* interpreter,
                                          double boxThresh, double nmsThreshold,
-                                         cv::Mat* input_img) {
+                                         int input_img_width,
+                                         int input_img_height) {
   const TfLiteTensor* outputTensor =
       TfLiteInterpreterGetOutputTensor(interpreter, 0);
 
@@ -75,8 +76,8 @@ std::vector<detect_result_t> obbPostProc(TfLiteInterpreter* interpreter,
 
   std::vector<detect_result_t> candidateResults;
 
-  DEBUG_PRINT("DEBUG: Image dimensions: %dx%d\n", input_img->cols,
-              input_img->rows);
+  DEBUG_PRINT("DEBUG: Image dimensions: %dx%d\n", input_img_width,
+              input_img_height);
 
   for (int i = 0; i < numBoxes; ++i) {
     // Use proper dequantization for score
@@ -112,13 +113,13 @@ std::vector<detect_result_t> obbPostProc(TfLiteInterpreter* interpreter,
                           outputParams.zero_point, outputParams.scale);
 
     float clamped_x1 =
-        std::max(0.0f, std::min(x1, static_cast<float>(input_img->cols)));
+        std::max(0.0f, std::min(x1, static_cast<float>(input_img_width)));
     float clamped_y1 =
-        std::max(0.0f, std::min(y1, static_cast<float>(input_img->rows)));
+        std::max(0.0f, std::min(y1, static_cast<float>(input_img_height)));
     float clamped_x2 =
-        std::max(0.0f, std::min(x2, static_cast<float>(input_img->cols)));
+        std::max(0.0f, std::min(x2, static_cast<float>(input_img_width)));
     float clamped_y2 =
-        std::max(0.0f, std::min(y2, static_cast<float>(input_img->rows)));
+        std::max(0.0f, std::min(y2, static_cast<float>(input_img_height)));
 
     float angle_degrees = angle * 180.0f / 3.14159265f;
 
