@@ -365,11 +365,14 @@ Java_org_photonvision_rubik_RubikJNI_detect
 
   try {
     if (isYolo(version)) {
-      results = yoloPostProc(interpreter, boxThresh, nmsThreshold, input_img);
+      results = yoloPostProc(interpreter, boxThresh, nmsThreshold,
+                             input_img->cols, input_img->rows);
     } else if (isOBB(version)) {
-      results = obbPostProc(interpreter, boxThresh, nmsThreshold, input_img);
+      results = obbPostProc(interpreter, boxThresh, nmsThreshold,
+                            input_img->cols, input_img->rows);
     } else if (isPro(version)) {
-      results = proPostProc(interpreter, boxThresh, nmsThreshold, input_img);
+      results = proPostProc(interpreter, boxThresh, nmsThreshold,
+                            input_img->cols, input_img->rows);
     } else {
       ThrowRuntimeException(env, "Unsupported YOLO version specified");
       return nullptr;

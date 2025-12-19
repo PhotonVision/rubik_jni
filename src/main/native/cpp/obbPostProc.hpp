@@ -19,11 +19,11 @@
 
 #include <vector>
 
-#include <opencv2/opencv.hpp>
 #include <tensorflow/lite/c/c_api.h>
 
 #include "utils.hpp"
 
 std::vector<detect_result_t> obbPostProc(TfLiteInterpreter* interpreter,
                                          double boxThresh, double nmsThreshold,
-                                         cv::Mat* input_img);
+                                         int input_img_width,
+                                         int input_img_height);

@@ -112,7 +112,8 @@ public class RubikTest {
                 "src/test/resources/ei-rubikpi-bird-object-detection-tensorflow-lite-int8-quantized-model.3.tflite",
                 "src/test/resources/bird.jpg",
                 4);
-        testModel("src/test/resources/ei-vehicle-detection-yolo-pro-object-detection-tensorflow-lite-int8-quantized-model.9.tflite",
+        testModel(
+                "src/test/resources/ei-vehicle-detection-yolo-pro-object-detection-tensorflow-lite-int8-quantized-model.9.tflite",
                 "src/test/resources/bus.jpg",
                 4);
     }
