@@ -33,7 +33,7 @@ public class RubikJNI {
          * @param x2 The x coordinate of the opposite vertex of the bounding box.
          * @param y2 The y coordinate of the opposite vertex of the bounding box.
          * @param conf The confidence score of the detection.
-         * @param angle The angle of the detected object in radians.
+         * @param angle The angle of the detected object in degrees.
          * @param class_id The class ID of the detected object.
          */
         public RubikResult(int x1, int y1, int x2, int y2, float conf, int class_id, float angle) {
