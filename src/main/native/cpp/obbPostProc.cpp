@@ -121,7 +121,7 @@ std::vector<detect_result_t> obbPostProc(TfLiteInterpreter* interpreter,
     float clamped_y2 =
         std::max(0.0f, std::min(y2, static_cast<float>(input_img_height)));
 
-    float angle_degrees = angle * 180.0f / 3.14159265f;
+    float angle_degrees = angle * 180.0f / M_PI;
 
     // Skip bad boxes
     if (clamped_x1 >= clamped_x2 || clamped_y1 >= clamped_y2) {
