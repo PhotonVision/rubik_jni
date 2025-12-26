@@ -101,7 +101,7 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM* vm, void* reserved) {
   }
 }
 
-static jobject MakeJObject(JNIEnv* env, const detect_result_t& result) {
+static jobject MakeJObject(JNIEnv* env, const DetectResult& result) {
   if (!detectionResultClass) {
     std::printf("ERROR: detectionResultClass is null!\n");
     return nullptr;
@@ -361,7 +361,7 @@ Java_org_photonvision_rubik_RubikJNI_detect
   DEBUG_PRINT("INFO: Model execution time: %.2f ms\n", elapsed_time);
 #endif
 
-  std::vector<detect_result_t> results;
+  std::vector<DetectResult> results;
 
   try {
     if (isYolo(version)) {
