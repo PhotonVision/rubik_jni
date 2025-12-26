@@ -31,7 +31,6 @@
 #include <opencv2/opencv.hpp>
 #include <tensorflow/lite/c/c_api.h>
 
-// Helper function for proper dequantization like example.c
 float get_dequant_value(void* data, TfLiteType tensor_type, int idx,
                         float zero_point, float scale) {
   switch (tensor_type) {
@@ -98,7 +97,7 @@ bool isOBB(int version) { return version == 3; }
 
 bool isPro(int version) { return version == 4; }
 
-static inline float calculateIoU(const BOX_RECT& box1, const BOX_RECT& box2) {
+static inline float calculateIoU(const BoxRect& box1, const BoxRect& box2) {
   // Optimization: If both angles are effectively zero, use faster AABB
   // calculation
   if (std::abs(box1.angle) < 0.1 && std::abs(box2.angle) < 0.1) {
@@ -154,17 +153,17 @@ static inline float calculateIoU(const BOX_RECT& box1, const BOX_RECT& box2) {
   return intersectionArea / unionArea;
 }
 
-std::vector<detect_result_t> optimizedNMS(
-    std::vector<detect_result_t>& candidates, float nmsThreshold) {
+std::vector<DetectResult> optimizedNMS(std::vector<DetectResult>& candidates,
+                                       float nmsThreshold) {
   if (candidates.empty()) return {};
 
   // Sort by confidence (descending) - single pass
   std::sort(candidates.begin(), candidates.end(),
-            [](const detect_result_t& a, const detect_result_t& b) {
+            [](const DetectResult& a, const DetectResult& b) {
               return a.obj_conf > b.obj_conf;
             });
 
-  std::vector<detect_result_t> results;
+  std::vector<DetectResult> results;
   results.reserve(candidates.size() / 4);  // Reasonable initial capacity
 
   // Use bitset for faster suppression tracking

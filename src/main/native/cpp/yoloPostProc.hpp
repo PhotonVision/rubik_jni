@@ -33,7 +33,7 @@
  * @param input_img Pointer to the input OpenCV image matrix.
  * @return A JNI array of detection result objects.
  */
-std::vector<detect_result_t> yoloPostProc(TfLiteInterpreter* interpreter,
-                                          double boxThresh, double nmsThreshold,
-                                          int input_img_width,
-                                          int input_img_height);
+std::vector<DetectResult> yoloPostProc(TfLiteInterpreter* interpreter,
+                                       double boxThresh, double nmsThreshold,
+                                       int input_img_width,
+                                       int input_img_height);

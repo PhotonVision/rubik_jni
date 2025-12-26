@@ -23,7 +23,7 @@
 
 #include "utils.hpp"
 
-std::vector<detect_result_t> obbPostProc(TfLiteInterpreter* interpreter,
-                                         double boxThresh, double nmsThreshold,
-                                         int input_img_width,
-                                         int input_img_height);
+std::vector<DetectResult> obbPostProc(TfLiteInterpreter* interpreter,
+                                      double boxThresh, double nmsThreshold,
+                                      int input_img_width,
+                                      int input_img_height);

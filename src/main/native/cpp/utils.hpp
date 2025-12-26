@@ -22,19 +22,19 @@
 #include <jni.h>
 #include <tensorflow/lite/c/c_api.h>
 
-typedef struct _BOX_RECT {
+struct BoxRect {
   int x1;
   int x2;
   int y1;
   int y2;
   double angle;
-} BOX_RECT;
+};
 
-typedef struct __detect_result_t {
+struct DetectResult {
   int id;
-  BOX_RECT box;
+  BoxRect box;
   float obj_conf;
-} detect_result_t;
+};
 
 static jclass runtimeExceptionClass = nullptr;
 
@@ -98,5 +98,5 @@ bool isPro(int version);
  * @param nmsThreshold The IoU threshold for suppression.
  * @return A vector of filtered detection results.
  */
-std::vector<detect_result_t> optimizedNMS(
-    std::vector<detect_result_t>& candidates, float nmsThreshold);
+std::vector<DetectResult> optimizedNMS(std::vector<DetectResult>& candidates,
+                                       float nmsThreshold);
