@@ -45,7 +45,7 @@ struct RubikDetector {
   TfLiteDelegate* delegate;
   TfLiteModel* model;
   int version;
-} RubikDetector;
+};
 
 extern "C" {
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
