@@ -97,7 +97,14 @@ bool isOBB(int version) { return version == 3; }
 
 bool isPro(int version) { return version == 4; }
 
-static inline float calculateIoU(const BoxRect& box1, const BoxRect& box2) {
+/**
+ * Calculates the Intersection over Union (IoU) between two bounding boxes.
+ * Supports both axis-aligned and oriented bounding boxes.
+ * @param box1 The first bounding box.
+ * @param box2 The second bounding box.
+ * @return The IoU value between 0 and 1.
+ */
+inline float calculateIoU(const BoxRect& box1, const BoxRect& box2) {
   // Optimization: If both angles are effectively zero, use faster AABB
   // calculation
   if (std::abs(box1.angle) < 0.1 && std::abs(box2.angle) < 0.1) {

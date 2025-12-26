@@ -40,16 +40,7 @@
 #include "utils.hpp"
 #include "yoloPostProc.hpp"
 
-// Debug print macro
-#ifndef NDEBUG
-#define DEBUG_PRINT(...) std::printf(__VA_ARGS__)
-#else
-#define DEBUG_PRINT(...) \
-  do {                   \
-  } while (0)
-#endif
-
-typedef struct RubikDetector {
+struct RubikDetector {
   TfLiteInterpreter* interpreter;
   TfLiteDelegate* delegate;
   TfLiteModel* model;
