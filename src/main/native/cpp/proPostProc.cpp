@@ -59,10 +59,10 @@ class columns).
   } while (0)
 #endif
 
-std::vector<detect_result_t> proPostProc(TfLiteInterpreter* interpreter,
-                                         double boxThresh, double nmsThreshold,
-                                         int input_img_width,
-                                         int input_img_height) {
+std::vector<DetectResult> proPostProc(TfLiteInterpreter* interpreter,
+                                      double boxThresh, double nmsThreshold,
+                                      int input_img_width,
+                                      int input_img_height) {
   const TfLiteTensor* outputTensor =
       TfLiteInterpreterGetOutputTensor(interpreter, 0);
 
@@ -93,7 +93,7 @@ std::vector<detect_result_t> proPostProc(TfLiteInterpreter* interpreter,
   DEBUG_PRINT("DEBUG: Quantization params - output: zp=%d, scale=%f\n",
               outputParams.zero_point, outputParams.scale);
 
-  std::vector<detect_result_t> candidateResults;
+  std::vector<DetectResult> candidateResults;
 
   DEBUG_PRINT("DEBUG: Image dimensions: %dx%d\n", input_img_width,
               input_img_height);
@@ -177,7 +177,7 @@ std::vector<detect_result_t> proPostProc(TfLiteInterpreter* interpreter,
     }
 #endif
 
-    detect_result_t det;
+    DetectResult det;
     det.box.x1 = static_cast<int>(std::round(clamped_x1));
     det.box.y1 = static_cast<int>(std::round(clamped_y1));
     det.box.x2 = static_cast<int>(std::round(clamped_x2));

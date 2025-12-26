@@ -43,10 +43,10 @@
   } while (0)
 #endif
 
-std::vector<detect_result_t> yoloPostProc(TfLiteInterpreter* interpreter,
-                                          double boxThresh, double nmsThreshold,
-                                          int input_img_width,
-                                          int input_img_height) {
+std::vector<DetectResult> yoloPostProc(TfLiteInterpreter* interpreter,
+                                       double boxThresh, double nmsThreshold,
+                                       int input_img_width,
+                                       int input_img_height) {
   const TfLiteTensor* boxesTensor =
       TfLiteInterpreterGetOutputTensor(interpreter, 0);
   const TfLiteTensor* scoresTensor =
@@ -102,7 +102,7 @@ std::vector<detect_result_t> yoloPostProc(TfLiteInterpreter* interpreter,
   DEBUG_PRINT("DEBUG: Quantization params - scores: zp=%d, scale=%f\n",
               scoresParams.zero_point, scoresParams.scale);
 
-  std::vector<detect_result_t> candidateResults;
+  std::vector<DetectResult> candidateResults;
 
   DEBUG_PRINT("DEBUG: Image dimensions: %dx%d\n", input_img_width,
               input_img_height);
@@ -162,7 +162,7 @@ std::vector<detect_result_t> yoloPostProc(TfLiteInterpreter* interpreter,
     }
 #endif
 
-    detect_result_t det;
+    DetectResult det;
     det.box.x1 = static_cast<int>(std::round(clamped_x1));
     det.box.y1 = static_cast<int>(std::round(clamped_y1));
     det.box.x2 = static_cast<int>(std::round(clamped_x2));
@@ -175,7 +175,7 @@ std::vector<detect_result_t> yoloPostProc(TfLiteInterpreter* interpreter,
   }
 
   // NMS
-  std::vector<detect_result_t> results =
+  std::vector<DetectResult> results =
       optimizedNMS(candidateResults, static_cast<float>(nmsThreshold));
 
   return results;
