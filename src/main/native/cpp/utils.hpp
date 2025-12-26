@@ -36,6 +36,14 @@ struct DetectResult {
   float obj_conf;
 };
 
+#ifndef NDEBUG
+#define DEBUG_PRINT(...) std::printf(__VA_ARGS__)
+#else
+#define DEBUG_PRINT(...) \
+  do {                   \
+  } while (0)
+#endif
+
 static jclass runtimeExceptionClass = nullptr;
 
 // JNI class reference (this can be global since it's shared)
