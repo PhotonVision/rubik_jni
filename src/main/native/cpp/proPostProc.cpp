@@ -51,14 +51,6 @@ class columns).
 
 #include "utils.hpp"
 
-#ifndef NDEBUG
-#define DEBUG_PRINT(...) std::printf(__VA_ARGS__)
-#else
-#define DEBUG_PRINT(...) \
-  do {                   \
-  } while (0)
-#endif
-
 std::vector<DetectResult> proPostProc(TfLiteInterpreter* interpreter,
                                       double boxThresh, double nmsThreshold,
                                       int input_img_width,
