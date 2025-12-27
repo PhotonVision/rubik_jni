@@ -88,13 +88,6 @@ void ThrowRuntimeException(JNIEnv* env, const char* message) {
   }
 }
 
-// Checks if a model is the basic yolo model
-bool isYolo(int version) { return version >= 1 && version <= 2; }
-
-bool isOBB(int version) { return version == 3; }
-
-bool isPro(int version) { return version == 4; }
-
 /**
  * Calculates the Intersection over Union (IoU) between two bounding boxes.
  * Supports both axis-aligned and oriented bounding boxes.
