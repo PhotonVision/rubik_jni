@@ -137,14 +137,12 @@ std::vector<DetectResult> obbPostProc(TfLiteInterpreter* interpreter,
     }
 #endif
 
-    DetectResult det;
-    det.box.x1 = static_cast<int>(std::round(clamped_x1));
-    det.box.y1 = static_cast<int>(std::round(clamped_y1));
-    det.box.x2 = static_cast<int>(std::round(clamped_x2));
-    det.box.y2 = static_cast<int>(std::round(clamped_y2));
-    det.box.angle = angle_degrees;
-    det.obj_conf = score;
-    det.id = classId;
+    BoxRect box{static_cast<int>(std::round(clamped_x1)),
+                static_cast<int>(std::round(clamped_y1)),
+                static_cast<int>(std::round(clamped_x2)),
+                static_cast<int>(std::round(clamped_y2)), angle_degrees};
+
+    DetectResult det{classId, box, score};
 
     candidateResults.push_back(det);
   }
