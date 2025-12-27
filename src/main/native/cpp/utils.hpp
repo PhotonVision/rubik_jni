@@ -24,8 +24,8 @@
 
 struct BoxRect {
   int x1;
-  int x2;
   int y1;
+  int x2;
   int y2;
   double angle;
 };
