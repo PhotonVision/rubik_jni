@@ -44,7 +44,7 @@ struct RubikDetector {
   TfLiteInterpreter* interpreter;
   TfLiteDelegate* delegate;
   TfLiteModel* model;
-  int version;
+  ModelVersion version;
 };
 
 extern "C" {
@@ -125,13 +125,17 @@ Java_org_photonvision_rubik_RubikJNI_create
     return 0;
   }
 
-  const int model_version = static_cast<int>(version);
-  if (!isYolo(model_version) && !isOBB(model_version) &&
-      !isPro(model_version)) {
-    ThrowRuntimeException(env, "Unsupported YOLO version specified");
+  int version_int = static_cast<int>(version);
+
+  // This should be updated whenever a new model version is added
+  if (version_int < ModelVersion::YOLOV8 ||
+      version_int > ModelVersion::YOLO_PRO) {
+    ThrowRuntimeException(env, "Invalid model version specified");
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
   }
+
+  ModelVersion model_version = static_cast<ModelVersion>(version_int);
 
   // Load the model
   TfLiteModel* model = TfLiteModelCreateFromFile(model_name);
@@ -269,7 +273,8 @@ Java_org_photonvision_rubik_RubikJNI_destroy
   if (detector->interpreter) TfLiteInterpreterDelete(detector->interpreter);
   if (detector->delegate) TfLiteExternalDelegateDelete(detector->delegate);
   if (detector->model) TfLiteModelDelete(detector->model);
-  // We don't need to delete the version since it's just an int not a pointer
+  // We don't need to delete the version since it's just an enum value not a
+  // pointer
 
   // Delete the RubikDetector object
   delete detector;
@@ -355,18 +360,26 @@ Java_org_photonvision_rubik_RubikJNI_detect
   std::vector<DetectResult> results;
 
   try {
-    if (isYolo(version)) {
-      results = yoloPostProc(interpreter, boxThresh, nmsThreshold,
-                             input_img->cols, input_img->rows);
-    } else if (isOBB(version)) {
-      results = obbPostProc(interpreter, boxThresh, nmsThreshold,
-                            input_img->cols, input_img->rows);
-    } else if (isPro(version)) {
-      results = proPostProc(interpreter, boxThresh, nmsThreshold,
-                            input_img->cols, input_img->rows);
-    } else {
-      ThrowRuntimeException(env, "Unsupported YOLO version specified");
-      return nullptr;
+    switch (version) {
+      case ModelVersion::YOLOV8:
+        results = yoloPostProc(interpreter, boxThresh, nmsThreshold,
+                               input_img->cols, input_img->rows);
+        break;
+      case ModelVersion::YOLOV11:
+        results = yoloPostProc(interpreter, boxThresh, nmsThreshold,
+                               input_img->cols, input_img->rows);
+        break;
+      case ModelVersion::YOLO_OBB:
+        results = obbPostProc(interpreter, boxThresh, nmsThreshold,
+                              input_img->cols, input_img->rows);
+        break;
+      case ModelVersion::YOLO_PRO:
+        results = proPostProc(interpreter, boxThresh, nmsThreshold,
+                              input_img->cols, input_img->rows);
+        break;
+      default:
+        ThrowRuntimeException(env, "Unsupported YOLO version specified");
+        return nullptr;
     }
 
     jobjectArray jResults =
@@ -422,10 +435,12 @@ Java_org_photonvision_rubik_RubikJNI_isQuantized
   // kTfLiteInt8 for pro models
   TfLiteType tensorType = TfLiteTensorType(input);
 
-  if (tensorType == kTfLiteUInt8 && !isPro(detector->version)) {
+  bool is_pro = detector->version == ModelVersion::YOLO_PRO;
+
+  if (tensorType == kTfLiteUInt8 && !is_pro) {
     DEBUG_PRINT("INFO: Input tensor is quantized\n");
     return JNI_TRUE;  // The model is quantized
-  } else if (tensorType == kTfLiteInt8 && isPro(detector->version)) {
+  } else if (tensorType == kTfLiteInt8 && is_pro) {
     DEBUG_PRINT("INFO: Input tensor is quantized\n");
     return JNI_TRUE;  // The model is quantized
   } else {

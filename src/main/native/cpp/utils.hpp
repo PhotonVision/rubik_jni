@@ -22,6 +22,13 @@
 #include <jni.h>
 #include <tensorflow/lite/c/c_api.h>
 
+/**
+ * Enumeration of model versions. This matches the enum in the Java code, and
+ * when one is updated the other should be as well. Note that YOLOV5 is omitted
+ * since it is not supported.
+ */
+enum ModelVersion { YOLOV8 = 1, YOLOV11 = 2, YOLO_OBB = 3, YOLO_PRO = 4 };
+
 struct BoxRect {
   int x1;
   int y1;
@@ -77,27 +84,6 @@ bool tensor_image_dims(const TfLiteTensor* tensor, int* w, int* h, int* c);
  * @param message The exception message.
  */
 void ThrowRuntimeException(JNIEnv* env, const char* message);
-
-/**
- * Checks if the given model version corresponds to a YOLO model.
- * @param version The model version.
- * @return True if it's a YOLO model, false otherwise.
- */
-bool isYolo(int version);
-
-/**
- * Checks if the given model version corresponds to an OBB model.
- * @param version The model version.
- * @return True if it's an OBB model, false otherwise.
- */
-bool isOBB(int version);
-
-/**
- * Checks if the given model corresponds to a pro model.
- * @param version The model version.
- * @return True if it's a pro model, false otherwise.
- */
-bool isPro(int version);
 
 /**
  * Performs Non-Maximum Suppression (NMS) on a list of detection results.
