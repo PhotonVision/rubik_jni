@@ -46,8 +46,6 @@ float get_dequant_value(void* data, TfLiteType tensor_type, int idx,
   return 0.0f;
 }
 
-// Guesses the width, height, and channels of a tensor if it were an image.
-// Returns false on failure.
 bool tensor_image_dims(const TfLiteTensor* tensor, int* w, int* h, int* c) {
   int n = TfLiteTensorNumDims(tensor);
   int cursor = 0;
