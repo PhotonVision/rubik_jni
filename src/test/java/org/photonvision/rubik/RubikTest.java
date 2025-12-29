@@ -103,18 +103,19 @@ public class RubikTest {
 
     @Test
     public void testYoloV8() {
-        testModel("src/test/resources/yolov8nCoco.tflite", "src/test/resources/bus.jpg", 1);
+        testModel(
+                "src/test/resources/models/yolov8nCoco.tflite", "src/test/resources/images/bus.jpg", 1);
     }
 
     @Test
     public void testYoloPro() {
         testModel(
-                "src/test/resources/ei-rubikpi-bird-object-detection-tensorflow-lite-int8-quantized-model.3.tflite",
-                "src/test/resources/bird.jpg",
+                "src/test/resources/models/ei-rubikpi-bird-object-detection-tensorflow-lite-int8-quantized-model.3.tflite",
+                "src/test/resources/images/bird.jpg",
                 4);
         testModel(
-                "src/test/resources/ei-vehicle-detection-yolo-pro-object-detection-tensorflow-lite-int8-quantized-model.9.tflite",
-                "src/test/resources/bus_320.jpg",
+                "src/test/resources/models/ei-vehicle-detection-yolo-pro-object-detection-tensorflow-lite-int8-quantized-model.9.tflite",
+                "src/test/resources/images/bus_320.jpg",
                 4);
     }
 
@@ -169,7 +170,7 @@ public class RubikTest {
             }
 
             // Create a Rubik detector instance
-            long ptr = RubikJNI.create("src/test/resources/yolov8nCoco.tflite", 0);
+            long ptr = RubikJNI.create("src/test/resources/models/yolov8nCoco.tflite", 0);
 
             if (ptr == 0) {
                 throw new RuntimeException("Failed to create Rubik detector");
@@ -204,7 +205,7 @@ public class RubikTest {
         System.load("/home/photon/rubik_jni/cmake_build/librubik_jni.so");
 
         System.out.println("Loading bus");
-        Mat img = Imgcodecs.imread("src/test/resources/bus.jpg");
+        Mat img = Imgcodecs.imread("src/test/resources/images/bus.jpg");
 
         if (img.empty()) {
             throw new RuntimeException("Failed to load image");
@@ -213,7 +214,7 @@ public class RubikTest {
         System.out.println("Image loaded: " + img.size() + " " + img.type());
 
         System.out.println("Creating Rubik detector");
-        long ptr = RubikJNI.create("src/test/resources/yolov8nCoco.tflite", 1);
+        long ptr = RubikJNI.create("src/test/resources/models/yolov8nCoco.tflite", 1);
 
         if (ptr == 0) {
             throw new RuntimeException("Failed to create Rubik detector");
