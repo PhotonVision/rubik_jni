@@ -27,7 +27,7 @@
  * when one is updated the other should be as well. Note that YOLOV5 is omitted
  * since it is not supported.
  */
-enum ModelVersion { YOLOV8 = 1, YOLOV11 = 2, YOLO_OBB = 3, YOLO_PRO = 4 };
+enum ModelVersion { YOLOV8 = 1, YOLOV11 = 2 };
 
 struct BoxRect {
   int x1;
