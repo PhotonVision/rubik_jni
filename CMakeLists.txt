@@ -96,8 +96,6 @@ add_library(
     src/main/native/cpp/rubik_jni.cpp
     src/main/native/cpp/utils.cpp
     src/main/native/cpp/yoloPostProc.cpp
-    src/main/native/cpp/obbPostProc.cpp
-    src/main/native/cpp/proPostProc.cpp
 )
 
 target_link_libraries(

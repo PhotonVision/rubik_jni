@@ -35,8 +35,6 @@
 #include <tensorflow/lite/delegates/external/external_delegate.h>
 #include <tensorflow/lite/version.h>
 
-#include "obbPostProc.hpp"
-#include "proPostProc.hpp"
 #include "utils.hpp"
 #include "yoloPostProc.hpp"
 
@@ -369,13 +367,6 @@ Java_org_photonvision_rubik_RubikJNI_detect
         results = yoloPostProc(interpreter, boxThresh, nmsThreshold,
                                input_img->cols, input_img->rows);
         break;
-      case ModelVersion::YOLO_OBB:
-        results = obbPostProc(interpreter, boxThresh, nmsThreshold,
-                              input_img->cols, input_img->rows);
-        break;
-      case ModelVersion::YOLO_PRO:
-        results = proPostProc(interpreter, boxThresh, nmsThreshold,
-                              input_img->cols, input_img->rows);
         break;
       default:
         ThrowRuntimeException(env, "Unsupported YOLO version specified");
@@ -431,16 +422,10 @@ Java_org_photonvision_rubik_RubikJNI_isQuantized
     return JNI_FALSE;
   }
 
-  // Check if the tensor type is kTfLiteUInt8 for yolo and obb models, or
-  // kTfLiteInt8 for pro models
+  // Check if the tensor type is kTfLiteUInt8
   TfLiteType tensorType = TfLiteTensorType(input);
 
-  bool is_pro = detector->version == ModelVersion::YOLO_PRO;
-
-  if (tensorType == kTfLiteUInt8 && !is_pro) {
-    DEBUG_PRINT("INFO: Input tensor is quantized\n");
-    return JNI_TRUE;  // The model is quantized
-  } else if (tensorType == kTfLiteInt8 && is_pro) {
+  if (tensorType == kTfLiteUInt8) {
     DEBUG_PRINT("INFO: Input tensor is quantized\n");
     return JNI_TRUE;  // The model is quantized
   } else {

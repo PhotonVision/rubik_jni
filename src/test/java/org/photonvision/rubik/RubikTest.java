@@ -107,18 +107,6 @@ public class RubikTest {
                 "src/test/resources/models/yolov8nCoco.tflite", "src/test/resources/images/bus.jpg", 1);
     }
 
-    @Test
-    public void testYoloPro() {
-        testModel(
-                "src/test/resources/models/ei-rubikpi-bird-object-detection-tensorflow-lite-int8-quantized-model.3.tflite",
-                "src/test/resources/images/bird.jpg",
-                4);
-        testModel(
-                "src/test/resources/models/ei-vehicle-detection-yolo-pro-object-detection-tensorflow-lite-int8-quantized-model.9.tflite",
-                "src/test/resources/images/bus_320.jpg",
-                4);
-    }
-
     // Helper method to determine if the memory leak test should be enabled
     static boolean isIterationTestEnabled(String param) {
         String iterations = System.getProperty(param);
