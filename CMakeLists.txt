@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.24)
 
 project(rubik_jni)
 
@@ -20,12 +20,7 @@ endif()
 
 set(BUILD_SHARED_LIBS ON)
 
-find_package(JNI)
-if(JNI_FOUND)
-    # Fixes odd AWT dependency
-    set(JNI_INCLUDE_DIRS ${JAVA_INCLUDE_PATH} ${JAVA_INCLUDE_PATH2})
-    message(STATUS "JNI_INCLUDE_DIRS=${JNI_INCLUDE_DIRS}")
-endif()
+find_package(JNI REQUIRED COMPONENTS JVM)
 
 set(OPENCV_YEAR "frc2025")
 set(OPENCV_VERSION "4.10.0-3")
