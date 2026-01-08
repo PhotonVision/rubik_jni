@@ -1,6 +1,6 @@
 build
 cmake_build
-*.gradle
+.gradle
 *.vscode
 bin
 *.onnx
