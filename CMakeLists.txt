@@ -88,8 +88,6 @@ else()
     message(STATUS "Found library directory: ${LIB_PATH}")
 endif()
 
-set(CMAKE_INSTALL_RPATH "lib")
-
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
@@ -114,8 +112,6 @@ target_include_directories(
         ${OPENCV_INCLUDE_PATH}
         ${TFLITE_INCLUDE_DIR}
 )
-
-set_target_properties(${PROJECT_NAME} PROPERTIES INSTALL_RPATH "\\\$ORIGIN/")
 
 include(GNUInstallDirs)
 install(TARGETS ${PROJECT_NAME})
