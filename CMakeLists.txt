@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.24)
 project(rubik_jni)
 
 set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_INSTALL_RPATH $ORIGIN)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(ENABLE_ASAN)
