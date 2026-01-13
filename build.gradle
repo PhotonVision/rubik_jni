@@ -149,7 +149,7 @@ nativeTasks.addToSourceSetResources(sourceSets.test)
 nativeConfig.dependencies.add wpilibTools.deps.wpilib("wpinet")
 nativeConfig.dependencies.add wpilibTools.deps.wpilib("wpiutil")
 nativeConfig.dependencies.add wpilibTools.deps.wpilib("cscore")
-nativeConfig.dependencies.add wpilibTools.deps.wpilibOpenCv("frc" + wpi.frcYear.get(), wpi.versions.opencvVersion.get())
+nativeConfig.dependencies.add wpilibTools.deps.wpilibOpenCv("frc2025", wpi.versions.opencvVersion.get())
 
 
 apply from: "publish.gradle"

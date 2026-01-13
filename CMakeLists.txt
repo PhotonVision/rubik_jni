@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.24)
 project(rubik_jni)
 
 set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_INSTALL_RPATH $ORIGIN)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(ENABLE_ASAN)
@@ -87,8 +88,6 @@ else()
     message(STATUS "Found library directory: ${LIB_PATH}")
 endif()
 
-set(CMAKE_INSTALL_RPATH "lib")
-
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
@@ -113,8 +112,6 @@ target_include_directories(
         ${OPENCV_INCLUDE_PATH}
         ${TFLITE_INCLUDE_DIR}
 )
-
-set_target_properties(${PROJECT_NAME} PROPERTIES INSTALL_RPATH "\\\$ORIGIN/")
 
 include(GNUInstallDirs)
 install(TARGETS ${PROJECT_NAME})
