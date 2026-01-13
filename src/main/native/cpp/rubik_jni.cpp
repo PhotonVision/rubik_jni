@@ -127,7 +127,7 @@ Java_org_photonvision_rubik_RubikJNI_create
 
   // This should be updated whenever a new model version is added
   if (version_int < ModelVersion::YOLOV8 ||
-      version_int > ModelVersion::YOLO_PRO) {
+      version_int > ModelVersion::YOLOV11) {
     ThrowRuntimeException(env, "Invalid model version specified");
     env->ReleaseStringUTFChars(modelPath, model_name);
     return 0;
