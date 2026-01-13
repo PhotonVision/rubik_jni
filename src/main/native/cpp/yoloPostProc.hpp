@@ -18,20 +18,18 @@
 #pragma once
 
 #include <vector>
-
-#include <jni.h>
 #include <tensorflow/lite/c/c_api.h>
 
 #include "utils.hpp"
 
-/***
+/**
  * Performs YOLO post-processing including box decoding and NMS.
  * @param interpreter Pointer to the TensorFlow Lite interpreter.
  * @param boxThresh Confidence threshold for filtering boxes.
  * @param nmsThreshold IoU threshold for Non-Maximum Suppression.
- * @param env Pointer to the JNI environment.
- * @param input_img Pointer to the input OpenCV image matrix.
- * @return A JNI array of detection result objects.
+ * @param input_img_width Width of the input image.
+ * @param input_img_height Height of the input image.
+ * @return A vector of DetectResult containing the final detections.
  */
 std::vector<DetectResult> yoloPostProc(TfLiteInterpreter* interpreter,
                                        double boxThresh, double nmsThreshold,
