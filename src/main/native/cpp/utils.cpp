@@ -86,7 +86,7 @@ bool tensor_image_dims(const TfLiteTensor* tensor, int* w, int* h, int* c) {
  * @param box2 The second bounding box.
  * @return The IoU value between 0 and 1.
  */
-inline float calculateIoU(const BoxRect& box1, const BoxRect& box2) {
+inline float calculateIoU(const BoundingBox& box1, const BoundingBox& box2) {
   // Optimization: If both angles are effectively zero, use faster AABB
   // calculation
   if (std::abs(box1.angle) < 0.1 && std::abs(box2.angle) < 0.1) {

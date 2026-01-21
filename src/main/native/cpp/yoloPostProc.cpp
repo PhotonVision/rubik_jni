@@ -153,10 +153,10 @@ std::vector<DetectResult> yoloPostProc(TfLiteInterpreter* interpreter,
     }
 #endif
 
-    BoxRect box{static_cast<int>(std::round(clamped_x1)),
-                static_cast<int>(std::round(clamped_y1)),
-                static_cast<int>(std::round(clamped_x2)),
-                static_cast<int>(std::round(clamped_y2)), 0.0};
+    BoundingBox box{static_cast<int>(std::round(clamped_x1)),
+                    static_cast<int>(std::round(clamped_y1)),
+                    static_cast<int>(std::round(clamped_x2)),
+                    static_cast<int>(std::round(clamped_y2)), 0.0};
 
     DetectResult det{classId, box, score};
 

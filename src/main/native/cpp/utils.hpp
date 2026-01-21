@@ -28,7 +28,14 @@
  */
 enum ModelVersion { YOLOV8 = 1, YOLOV11 = 2 };
 
-struct BoxRect {
+/**
+ * Structure representing a bounding box.
+ *
+ * x1, y1: Top-left corner coordinates.
+ * x2, y2: Bottom-right corner coordinates.
+ * angle: Rotation angle of the bounding box.
+ */
+struct BoundingBox {
   int x1;
   int y1;
   int x2;
@@ -36,6 +43,14 @@ struct BoxRect {
   double angle;
 };
 
+/**
+ * Structure representing a Rubik detector instance.
+ *
+ * interpreter: Pointer to the TensorFlow Lite interpreter.
+ * delegate: Pointer to the TensorFlow Lite delegate (if any).
+ * model: Pointer to the TensorFlow Lite model.
+ * version: The version of the model being used.
+ */
 struct RubikDetector {
   TfLiteInterpreter* interpreter;
   TfLiteDelegate* delegate;
@@ -43,9 +58,16 @@ struct RubikDetector {
   ModelVersion version;
 };
 
+/**
+ * Structure representing a detection result.
+ *
+ * id: Class ID of the detected object.
+ * box: Bounding box of the detected object.
+ * obj_conf: Confidence score of the detected object.
+ */
 struct DetectResult {
   int id;
-  BoxRect box;
+  BoundingBox box;
   float obj_conf;
 };
 
