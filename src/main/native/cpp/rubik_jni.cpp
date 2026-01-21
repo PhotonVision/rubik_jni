@@ -365,9 +365,6 @@ Java_org_photonvision_rubik_RubikJNI_detect
   try {
     switch (version) {
       case ModelVersion::YOLOV8:
-        results = yoloPostProc(interpreter, boxThresh, nmsThreshold,
-                               input_img->cols, input_img->rows);
-        break;
       case ModelVersion::YOLOV11:
         results = yoloPostProc(interpreter, boxThresh, nmsThreshold,
                                input_img->cols, input_img->rows);
