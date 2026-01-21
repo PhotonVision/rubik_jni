@@ -20,10 +20,10 @@
  */
 
 #include <jni.h>
-#include <tflite/c/c_api.h>
-#include <tflite/c/c_api_experimental.h>
-#include <tflite/delegates/external/external_delegate.h>
-#include <tflite/version.h>
+#include <tensorflow/lite/c/c_api.h>
+#include <tensorflow/lite/c/c_api_experimental.h>
+#include <tensorflow/lite/delegates/external/external_delegate.h>
+#include <tensorflow/lite/version.h>
 
 #include <algorithm>
 #include <cstdio>
