@@ -62,7 +62,7 @@ message("Depending on opencv ${OPENCV_LIB_PATH}")
 include(FetchContent)
 FetchContent_Declare(
     tflite_header
-    URL https://github.com/google-ai-edge/LiteRT/archive/refs/tags/v2.1.0.zip
+    URL https://github.com/tensorflow/tensorflow/archive/refs/tags/v2.19.0.zip
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(tflite_header)

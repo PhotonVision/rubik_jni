@@ -1,12 +1,12 @@
 # Shared Libraries
 
-Last build of tensorflow libraries was from https://github.com/google-ai-edge/LiteRT/tree/v2.1.0
+Last build of tensorflow libraries was on version 2.19.0
 To build the necessary tensorflow libraries, the following commands can be used
 
 ```
-bazel build --config=elinux_aarch64 -c opt //tlite:libtensorflowlite.so
-bazel build --config=elinux_aarch64 -c opt //tlite/c:libtensorflowlite_c.so
-bazel build --config=elinux_aarch64 -c opt //tlite/delegates/external:external_delegate
+bazel build --config=elinux_aarch64 -c opt //tensorflow/lite:libtensorflowlite.so
+bazel build --config=elinux_aarch64 -c opt //tensorflow/lite/c:libtensorflowlite_c.so
+bazel build --config=elinux_aarch64 -c opt //tensorflow/lite/delegates/external:external_delegate
 ```
 
 # Building On a Rubik Pi
