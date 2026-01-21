@@ -302,8 +302,6 @@ Java_org_photonvision_rubik_RubikJNI_detect
     return nullptr;
   }
 
-  int version = detector->version;
-
   if (!detector->interpreter) {
     ThrowRuntimeException(env, "Interpreter not initialized");
     return nullptr;
@@ -363,7 +361,7 @@ Java_org_photonvision_rubik_RubikJNI_detect
   std::vector<DetectResult> results;
 
   try {
-    switch (version) {
+    switch (detector->version) {
       case ModelVersion::YOLOV8:
       case ModelVersion::YOLOV11:
         results = yoloPostProc(interpreter, boxThresh, nmsThreshold,
