@@ -19,7 +19,6 @@
 
 #include <vector>
 
-#include <jni.h>
 #include <tensorflow/lite/c/c_api.h>
 
 /**
@@ -37,6 +36,13 @@ struct BoxRect {
   double angle;
 };
 
+struct RubikDetector {
+  TfLiteInterpreter* interpreter;
+  TfLiteDelegate* delegate;
+  TfLiteModel* model;
+  ModelVersion version;
+};
+
 struct DetectResult {
   int id;
   BoxRect box;
@@ -50,11 +56,6 @@ struct DetectResult {
   do {                   \
   } while (0)
 #endif
-
-static jclass runtimeExceptionClass = nullptr;
-
-// JNI class reference (this can be global since it's shared)
-static jclass detectionResultClass = nullptr;
 
 /**
  * Gets the dequantized value from tensor data.
@@ -77,13 +78,6 @@ float get_dequant_value(void* data, TfLiteType tensor_type, int idx,
  * @return True if the dimensions were successfully inferred, false otherwise.
  */
 bool tensor_image_dims(const TfLiteTensor* tensor, int* w, int* h, int* c);
-
-/**
- * Throws a Java RuntimeException with the given message.
- * @param env The JNI environment.
- * @param message The exception message.
- */
-void ThrowRuntimeException(JNIEnv* env, const char* message);
 
 /**
  * Performs Non-Maximum Suppression (NMS) on a list of detection results.

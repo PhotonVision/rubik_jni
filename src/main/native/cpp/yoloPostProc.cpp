@@ -25,7 +25,6 @@
 #include <utility>
 #include <vector>
 
-#include <jni.h>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/opencv.hpp>
 #include <tensorflow/lite/c/c_api.h>

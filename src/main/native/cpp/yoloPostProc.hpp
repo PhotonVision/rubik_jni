@@ -18,6 +18,7 @@
 #pragma once
 
 #include <vector>
+
 #include <tensorflow/lite/c/c_api.h>
 
 #include "utils.hpp"

@@ -38,12 +38,10 @@
 #include "utils.hpp"
 #include "yoloPostProc.hpp"
 
-struct RubikDetector {
-  TfLiteInterpreter* interpreter;
-  TfLiteDelegate* delegate;
-  TfLiteModel* model;
-  ModelVersion version;
-};
+static jclass runtimeExceptionClass = nullptr;
+
+// JNI class reference (this can be global since it's shared)
+static jclass detectionResultClass = nullptr;
 
 extern "C" {
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
@@ -106,6 +104,13 @@ static jobject MakeJObject(JNIEnv* env, const DetectResult& result) {
   return env->NewObject(detectionResultClass, constructor, result.box.x1,
                         result.box.y1, result.box.x2, result.box.y2,
                         result.obj_conf, result.id, result.box.angle);
+}
+
+// Helper function to throw exceptions
+void ThrowRuntimeException(JNIEnv* env, const char* message) {
+  if (runtimeExceptionClass) {
+    env->ThrowNew(runtimeExceptionClass, message);
+  }
 }
 
 /*
@@ -366,7 +371,6 @@ Java_org_photonvision_rubik_RubikJNI_detect
       case ModelVersion::YOLOV11:
         results = yoloPostProc(interpreter, boxThresh, nmsThreshold,
                                input_img->cols, input_img->rows);
-        break;
         break;
       default:
         ThrowRuntimeException(env, "Unsupported YOLO version specified");

@@ -26,7 +26,6 @@
 #include <utility>
 #include <vector>
 
-#include <jni.h>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/opencv.hpp>
 #include <tensorflow/lite/c/c_api.h>
@@ -67,7 +66,6 @@ bool tensor_image_dims(const TfLiteTensor* tensor, int* w, int* h, int* c) {
         break;
       default:
         return false;
-        break;
     }
   }
 
@@ -79,13 +77,6 @@ bool tensor_image_dims(const TfLiteTensor* tensor, int* w, int* h, int* c) {
   if (*c > 4) return false;
   // The tensor dimension appears coherent.
   return true;
-}
-
-// Helper function to throw exceptions
-void ThrowRuntimeException(JNIEnv* env, const char* message) {
-  if (runtimeExceptionClass) {
-    env->ThrowNew(runtimeExceptionClass, message);
-  }
 }
 
 /**

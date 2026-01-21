@@ -43,11 +43,10 @@ public class RubikJNI {
             // Calc size
             double width = x2 - x1;
             double height = y2 - y1;
-            Size size = new org.opencv.core.Size(width, height);
 
             Point center = new Point((x1 + x2) / 2.0, (y1 + y2) / 2.0);
 
-            this.rect = new RotatedRect(center, size, angle);
+            this.rect = new RotatedRect(center, new Size(width, height), angle);
         }
 
         public final RotatedRect rect;
