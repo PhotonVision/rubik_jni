@@ -128,6 +128,7 @@ Java_org_photonvision_rubik_RubikJNI_create
     return 0;
   }
 
+  // Validate model version
   int version_int = static_cast<int>(version);
 
   // This should be updated whenever a new model version is added
