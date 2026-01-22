@@ -95,7 +95,6 @@ public class RubikTest {
             Imgcodecs.imwrite(newImagePath, img);
             System.out.println("Results written to image and saved as " + newImagePath);
         } catch (IOException e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
         }
     }
