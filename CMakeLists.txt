@@ -91,10 +91,7 @@ endif()
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
-file(
-    GLOB NATIVE_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/main/native/cpp/*.cpp"
-)
+file(GLOB NATIVE_SOURCES src/main/native/cpp/*.cpp)
 
 add_library(${PROJECT_NAME} ${NATIVE_SOURCES})
 
