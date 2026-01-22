@@ -18,28 +18,38 @@
 package org.photonvision.rubik;
 
 import org.opencv.core.Point;
-import org.opencv.core.Rect2d;
+import org.opencv.core.RotatedRect;
+import org.opencv.core.Size;
 
 public class RubikJNI {
     /** A class representing the result of a detection. */
     public static class RubikResult {
         /**
-         * Create a RubikResult with the specified bounding box coordinates, confidence, and class ID.
+         * Create a RubikResult with the specified bounding box coordinates, confidence, class ID, and
+         * angle.
          *
          * @param x1 The x coordinate of a vertex of the bounding box.
          * @param y1 The y coordinate of a vertex of the bounding box.
          * @param x2 The x coordinate of the opposite vertex of the bounding box.
          * @param y2 The y coordinate of the opposite vertex of the bounding box.
          * @param conf The confidence score of the detection.
+         * @param angle The angle of the detected object in degrees.
          * @param class_id The class ID of the detected object.
          */
-        public RubikResult(int x1, int y1, int x2, int y2, float conf, int class_id) {
+        public RubikResult(int x1, int y1, int x2, int y2, float conf, int class_id, float angle) {
             this.conf = conf;
             this.class_id = class_id;
-            this.rect = new Rect2d(new Point(x1, y1), new Point(x2, y2));
+
+            // Calc size
+            double width = x2 - x1;
+            double height = y2 - y1;
+
+            Point center = new Point((x1 + x2) / 2.0, (y1 + y2) / 2.0);
+
+            this.rect = new RotatedRect(center, new Size(width, height), angle);
         }
 
-        public final Rect2d rect;
+        public final RotatedRect rect;
         public final float conf;
         public final int class_id;
 
@@ -77,9 +87,11 @@ public class RubikJNI {
      * Create a RubikJNI instance with the specified model path.
      *
      * @param modelPath Absolute path to the model file
+     * @param version The version of the model. This should be the ordinal from the ModelVersion enum.
+     *     If this enum changes, it should be changed in the JNI as well.
      * @return A pointer to a struct with the tflite detector instance.
      */
-    public static native long create(String modelPath);
+    public static native long create(String modelPath, int version);
 
     /**
      * Destroy the RubikJNI instance.

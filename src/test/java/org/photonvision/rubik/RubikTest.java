@@ -32,83 +32,77 @@ import org.opencv.imgproc.Imgproc;
 import org.photonvision.rubik.RubikJNI.RubikResult;
 
 public class RubikTest {
-    @Test
-    public void testBasicBlobs() {
+    public void testModel(String modelPath, String imagePath, int modelVersion) {
         try {
             CombinedRuntimeLoader.loadLibraries(RubikTest.class, Core.NATIVE_LIBRARY_NAME);
-        } catch (IOException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
 
-        System.out.println(Core.getBuildInformation());
-        System.out.println(Core.OpenCLApiCallError);
+            System.out.println(Core.getBuildInformation());
+            System.out.println(Core.OpenCLApiCallError);
 
-        System.out.println("Loading rubik_jni");
-        System.load("/home/ubuntu/rubik_jni/cmake_build/librubik_jni.so");
+            System.out.println("Loading rubik_jni");
+            System.load("/home/photon/rubik_jni/cmake_build/librubik_jni.so");
 
-        System.out.println("Loading bus");
-        Mat img = Imgcodecs.imread("src/test/resources/bus.jpg");
+            System.out.println("Loading image: " + imagePath);
+            Mat img = Imgcodecs.imread(imagePath);
 
-        if (img.empty()) {
-            throw new RuntimeException("Failed to load image");
-        }
-
-        System.out.println("Image loaded: " + img.size() + " " + img.type());
-
-        System.out.println("Creating Rubik detector");
-        long ptr = RubikJNI.create("src/test/resources/yolov8nCoco.tflite");
-
-        if (ptr == 0) {
-            throw new RuntimeException("Failed to create Rubik detector");
-        }
-
-        System.out.println("Rubik detector created: " + ptr);
-
-        assertTrue(RubikJNI.isQuantized(ptr), "Rubik detector should be quantized");
-
-        RubikResult[] ret = RubikJNI.detect(ptr, img.getNativeObjAddr(), 0.5f, 0.45f);
-
-        System.out.println("Detection results: " + Arrays.toString(ret));
-
-        System.out.println("Releasing Rubik detector");
-        RubikJNI.destroy(ptr);
-
-        for (RubikResult result : ret) {
-            System.out.println("Result: " + result);
-
-            Scalar color = new Scalar(0, 255, 0); // Green color is default for bounding box
-
-            if (result.class_id == 0) {
-                color = new Scalar(255, 0, 0); // Blue for person
-            } else if (result.class_id == 5) {
-                color = new Scalar(0, 0, 255); // Red for bus
+            if (img.empty()) {
+                throw new RuntimeException("Failed to load image");
             }
 
-            // Draw bounding box on the image
-            Imgproc.rectangle(
-                    img,
-                    new Point(result.rect.x, result.rect.y),
-                    new Point(result.rect.x + result.rect.width, result.rect.y + result.rect.height),
-                    color,
-                    2 // Thickness
-                    );
+            System.out.println("Image loaded: " + img.size() + " " + img.type());
 
-            // Put label text
-            // Imgproc.putText(
-            //     img,
-            //     result.class_id + " " + String.format("%.2f", result.conf),
-            //     new Point(result.rect.x, result.rect.y - 10),
-            //     Imgproc.FONT_HERSHEY_SIMPLEX,
-            //     0.5, // Font scale
-            //     new Scalar(0, 255, 0), // Green color
-            //     1 // Thickness
-            // );
+            System.out.println("Creating Rubik detector");
+            long ptr = RubikJNI.create(modelPath, modelVersion);
+
+            if (ptr == 0) {
+                throw new RuntimeException("Failed to create Rubik detector");
+            }
+
+            System.out.println("Rubik detector created: " + ptr);
+
+            assertTrue(RubikJNI.isQuantized(ptr), "Rubik detector should be quantized");
+
+            RubikResult[] ret = RubikJNI.detect(ptr, img.getNativeObjAddr(), 0.5f, 0.45f);
+
+            System.out.println("Detection results: " + Arrays.toString(ret));
+
+            System.out.println("Releasing Rubik detector");
+            RubikJNI.destroy(ptr);
+
+            for (RubikResult result : ret) {
+                System.out.println("Result: " + result);
+
+                Scalar color = new Scalar(0, 255, 0); // Green color is default for bounding box
+
+                if (result.class_id == 0) {
+                    color = new Scalar(255, 0, 0); // Blue for person
+                } else if (result.class_id == 5) {
+                    color = new Scalar(0, 0, 255); // Red for bus
+                }
+
+                // Draw bounding box on the image
+                Point[] rectPoints = new Point[4];
+                result.rect.points(rectPoints);
+                for (int j = 0; j < 4; j++) {
+                    Imgproc.line(img, rectPoints[j], rectPoints[(j + 1) % 4], color, 2, 8);
+                }
+            }
+
+            String newImagePath =
+                    imagePath.substring(0, imagePath.lastIndexOf('.')) + "_with_results.jpg";
+
+            // Save the image with results
+            Imgcodecs.imwrite(newImagePath, img);
+            System.out.println("Results written to image and saved as " + newImagePath);
+        } catch (IOException e) {
+            e.printStackTrace();
         }
+    }
 
-        // Save the image with results
-        Imgcodecs.imwrite("src/test/resources/bus_with_results.jpg", img);
-        System.out.println("Results written to image and saved as bus_with_results.jpg");
+    @Test
+    public void testYoloV8() {
+        testModel(
+                "src/test/resources/models/yolov8nCoco.tflite", "src/test/resources/images/bus.jpg", 1);
     }
 
     // Helper method to determine if the memory leak test should be enabled
@@ -151,7 +145,7 @@ public class RubikTest {
         System.out.println(Core.OpenCLApiCallError);
 
         System.out.println("Loading rubik_jni");
-        System.load("/home/ubuntu/rubik_jni/cmake_build/librubik_jni.so");
+        System.load("/home/photon/rubik_jni/cmake_build/librubik_jni.so");
 
         int numRuns = Integer.parseInt(System.getProperty("memLeakTestIterations"));
 
@@ -162,7 +156,7 @@ public class RubikTest {
             }
 
             // Create a Rubik detector instance
-            long ptr = RubikJNI.create("src/test/resources/yolov8nCoco.tflite");
+            long ptr = RubikJNI.create("src/test/resources/models/yolov8nCoco.tflite", 0);
 
             if (ptr == 0) {
                 throw new RuntimeException("Failed to create Rubik detector");
@@ -194,10 +188,10 @@ public class RubikTest {
         System.out.println(Core.OpenCLApiCallError);
 
         System.out.println("Loading rubik_jni");
-        System.load("/home/ubuntu/rubik_jni/cmake_build/librubik_jni.so");
+        System.load("/home/photon/rubik_jni/cmake_build/librubik_jni.so");
 
         System.out.println("Loading bus");
-        Mat img = Imgcodecs.imread("src/test/resources/bus.jpg");
+        Mat img = Imgcodecs.imread("src/test/resources/images/bus.jpg");
 
         if (img.empty()) {
             throw new RuntimeException("Failed to load image");
@@ -206,7 +200,7 @@ public class RubikTest {
         System.out.println("Image loaded: " + img.size() + " " + img.type());
 
         System.out.println("Creating Rubik detector");
-        long ptr = RubikJNI.create("src/test/resources/yolov8nCoco.tflite");
+        long ptr = RubikJNI.create("src/test/resources/models/yolov8nCoco.tflite", 1);
 
         if (ptr == 0) {
             throw new RuntimeException("Failed to create Rubik detector");
@@ -218,7 +212,7 @@ public class RubikTest {
         long startTime = System.nanoTime();
 
         for (int i = 0; i < numRuns; i++) {
-            RubikResult[] ret = RubikJNI.detect(ptr, img.getNativeObjAddr(), 0.5f, 0.45f);
+            RubikJNI.detect(ptr, img.getNativeObjAddr(), 0.5f, 0.45f);
         }
 
         long endTime = System.nanoTime();
