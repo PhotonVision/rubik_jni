@@ -26,34 +26,34 @@ jobs:
       matrix:
         include:
           - build-type: Release
-            os: ubuntu-24.04-arm
+            os: ubuntu-26.04-arm
             platform: "linuxarm64"
           - build-type: Debug
-            os: ubuntu-24.04-arm
+            os: ubuntu-26.04-arm
             platform: "linuxarm64"
           - build-type: Asan
-            os: ubuntu-24.04-arm
+            os: ubuntu-26.04-arm
             platform: "linuxarm64"
           - build-type: Ubsan
-            os: ubuntu-24.04-arm
+            os: ubuntu-26.04-arm
             platform: "linuxarm64"
           - build-type: Tsan
-            os: ubuntu-24.04-arm
+            os: ubuntu-26.04-arm
             platform: "linuxarm64"
           - build-type: Release
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             platform: "linuxx86-64"
           - build-type: Debug
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             platform: "linuxx86-64"
           - build-type: Asan
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             platform: "linuxx86-64"
           - build-type: Ubsan
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             platform: "linuxx86-64"
           - build-type: Tsan
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             platform: "linuxx86-64"
 
     runs-on: ${{ matrix.os }}

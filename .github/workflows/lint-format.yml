@@ -22,7 +22,7 @@ jobs:
       - uses: gradle/actions/wrapper-validation@v6
   wpiformat:
     name: "wpiformat"
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v6
       - name: Fetch all history and metadata
@@ -51,7 +51,7 @@ jobs:
   javaformat:
     name: "Java Formatting"
     needs: [validation]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v6
         with:
